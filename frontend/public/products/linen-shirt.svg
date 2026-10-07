@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#e6dfd1"/>
+  <rect x="210" y="200" width="180" height="400" fill="#d6dce1"/>
+  <text x="300" y="650" font-family="Georgia, serif" font-size="32" fill="#25221f" text-anchor="middle">Relaxed Linen</text>
+  <text x="300" y="688" font-family="Georgia, serif" font-size="32" fill="#25221f" text-anchor="middle">Shirt</text>
+</svg>

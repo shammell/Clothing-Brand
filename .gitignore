@@ -1,0 +1,26 @@
+# Python
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+*.pyc
+backend/.pytest_cache/
+
+# Env secrets
+.env
+.env.local
+.env.*.local
+
+# Next.js / Node
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+npm-debug.log*
+
+# Playwright MCP artifacts (saved outside the repo by default, but ignore
+# defensively in case a snapshot ever lands inside it)
+.playwright-mcp/
+
+# OS/editor
+.DS_Store
+Thumbs.db

@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#d3a4a0"/>
+  <path d="M250 180 L350 180 L400 650 L200 650 Z" fill="#b94343" opacity="0.7"/>
+  <text x="300" y="720" font-family="Georgia, serif" font-size="32" fill="#25221f" text-anchor="middle">Lightweight Summer</text>
+  <text x="300" y="758" font-family="Georgia, serif" font-size="32" fill="#25221f" text-anchor="middle">Dress</text>
+</svg>

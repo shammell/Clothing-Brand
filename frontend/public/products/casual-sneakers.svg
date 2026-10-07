@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="600" height="800" viewBox="0 0 600 800">
+  <rect width="600" height="800" fill="#f5f5f5"/>
+  <ellipse cx="300" cy="420" rx="180" ry="80" fill="#171717" opacity="0.85"/>
+  <text x="300" y="600" font-family="Georgia, serif" font-size="32" fill="#25221f" text-anchor="middle">Leather Casual</text>
+  <text x="300" y="638" font-family="Georgia, serif" font-size="32" fill="#25221f" text-anchor="middle">Sneakers</text>
+</svg>
