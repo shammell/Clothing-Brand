@@ -22,6 +22,14 @@ class Settings(BaseSettings):
     # exactly that reason, and a loopback-only bind silently breaks it.
     HOST: str = "0.0.0.0"
     PORT: int = 8003
+    # Hard ceiling on total /chat/ calls across every caller combined, since
+    # each call is a paid Groq request and the endpoint is unauthenticated.
+    # An hourly window (not per-minute) matters: a per-minute global cap can
+    # be drained by one client with a handful of proxy IPs in seconds, taking
+    # the feature down for everyone else. "Acceptable worst-case spend" is a
+    # business call, not something to hardcode a guess for - tune this in
+    # .env to match actual Groq budget tolerance.
+    CHAT_GLOBAL_RATE_LIMIT: str = "1000/hour"
 
     class Config:
         env_file = ".env"
