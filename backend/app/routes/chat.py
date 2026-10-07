@@ -10,6 +10,12 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 @router.post("/", response_model=ChatResponse)
 @limiter.limit("15/minute")
+# This endpoint is intentionally unauthenticated (anonymous visitors should be
+# able to ask the style assistant before creating an account) and forwards
+# every call to a paid Groq API request. The per-IP limit above is trivial to
+# bypass with multiple IPs/proxies, so this shared limit caps total spend
+# across ALL callers combined as a hard ceiling, independent of IP.
+@limiter.shared_limit("120/minute", scope="chat_global")
 async def chat(request: Request, chat_request: ChatMessageRequest):
     try:
         reply = await get_chat_response(chat_request.message, chat_request.history)

@@ -2,6 +2,10 @@ from pydantic import field_validator
 from pydantic_settings import BaseSettings
 
 INSECURE_DEFAULTS = {"your-secret-key", "your-groq-api-key"}
+# A denylist of just the placeholder strings is fail-open: "JWT_SECRET_KEY=123"
+# or "=password" would sail through untouched. HS256 needs real entropy, so
+# also reject anything too short to have been a deliberately generated secret.
+MIN_JWT_SECRET_LENGTH = 32
 
 
 class Settings(BaseSettings):
@@ -29,6 +33,12 @@ class Settings(BaseSettings):
             raise ValueError(
                 "JWT_SECRET_KEY is using the insecure placeholder default. "
                 "Set a real secret in .env."
+            )
+        if len(value) < MIN_JWT_SECRET_LENGTH:
+            raise ValueError(
+                f"JWT_SECRET_KEY is too short ({len(value)} chars, need at least "
+                f"{MIN_JWT_SECRET_LENGTH}). Generate one with: "
+                'python -c "import secrets; print(secrets.token_urlsafe(32))"'
             )
         return value
 
