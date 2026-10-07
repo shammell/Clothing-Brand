@@ -15,7 +15,11 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 # every call to a paid Groq API request. The per-IP limit above is trivial to
 # bypass with multiple IPs/proxies, so this shared limit caps total spend
 # across ALL callers combined as a hard ceiling, independent of IP.
-@limiter.shared_limit("120/minute", scope="chat_global")
+# key_func must return a constant, not the default remote-address lookup -
+# without it this decorator is keyed per-IP too, making it a strictly looser
+# duplicate of the limit above (120/min per IP, vs. 15/min per IP) that never
+# actually triggers: a security-control no-op, not a global cap.
+@limiter.shared_limit("120/minute", scope="chat_global", key_func=lambda: "global")
 async def chat(request: Request, chat_request: ChatMessageRequest):
     try:
         reply = await get_chat_response(chat_request.message, chat_request.history)
