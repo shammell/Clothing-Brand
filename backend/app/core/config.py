@@ -22,14 +22,19 @@ class Settings(BaseSettings):
     # exactly that reason, and a loopback-only bind silently breaks it.
     HOST: str = "0.0.0.0"
     PORT: int = 8003
-    # Hard ceiling on total /chat/ calls across every caller combined, since
-    # each call is a paid Groq request and the endpoint is unauthenticated.
-    # An hourly window (not per-minute) matters: a per-minute global cap can
-    # be drained by one client with a handful of proxy IPs in seconds, taking
-    # the feature down for everyone else. "Acceptable worst-case spend" is a
-    # business call, not something to hardcode a guess for - tune this in
-    # .env to match actual Groq budget tolerance.
-    CHAT_GLOBAL_RATE_LIMIT: str = "1000/hour"
+    # Two layered ceilings on total /chat/ calls across every caller combined
+    # (each call is a paid Groq request, and the endpoint is unauthenticated).
+    # Neither window alone is enough: a short-only global cap gets drained in
+    # seconds by a client with a handful of proxy IPs; a long-only one avoids
+    # that but then locks out EVERY visitor for up to the full window once
+    # drained - by abuse, or just a genuine traffic spike, which is a worse
+    # outage than the attack it was meant to stop. Layering them bounds both:
+    # the burst window caps the damage and recovery time of any single spike,
+    # the sustained window catches slow abuse that stays under the burst
+    # threshold. "Acceptable worst-case spend" is a business call, not
+    # something to hardcode a guess for - tune both in .env.
+    CHAT_GLOBAL_BURST_RATE_LIMIT: str = "40/minute"
+    CHAT_GLOBAL_SUSTAINED_RATE_LIMIT: str = "1000/hour"
 
     class Config:
         env_file = ".env"
