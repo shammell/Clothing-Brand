@@ -2,14 +2,20 @@
 
 :root { --ink:#25221f; --cream:#f7f4ef; --muted:#8f8981; --line:#ded9d1; --accent:#c56f4d; }
 * { box-sizing:border-box; }
-html { scroll-behavior:smooth; }
+html { scroll-behavior:smooth; overflow-x:hidden; }
 body { margin:0; background:var(--cream); color:var(--ink); font-family:Arial, Helvetica, sans-serif; }
 button, input { font:inherit; }
 button { cursor:pointer; }
-.store-shell { overflow:hidden; }
+/* No overflow rule here: setting it on either axis forces the other
+   non-"visible" too per the CSS spec, and ANY non-visible overflow turns
+   this element into its own scroll container, which breaks position:sticky
+   on every descendant (confirmed empirically - the navbar wouldn't stick
+   with overflow-x:hidden here either, only removing it entirely worked).
+   The horizontal-scroll guard moved to html above instead, which is the
+   viewport's own scroller and doesn't capture descendants this way. */
 .announcement { background:#25221f; color:#f7f4ef; text-align:center; padding:10px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
 .announcement span { color:#c56f4d; margin:0 10px; }
-.navbar { height:82px; display:flex; align-items:center; justify-content:space-between; padding:0 5vw; border-bottom:1px solid var(--line); background:var(--cream); }
+.navbar { height:82px; display:flex; align-items:center; justify-content:space-between; padding:0 5vw; border-bottom:1px solid var(--line); background:var(--cream); position:sticky; top:0; z-index:9; }
 .brand { color:var(--ink); font-size:21px; font-weight:800; letter-spacing:.16em; text-decoration:none; }
 .brand span { color:var(--accent); }
 .nav-links { display:flex; gap:34px; margin-left:10%; }
@@ -52,6 +58,13 @@ h1 em,h2 em { color:var(--accent); font-style:italic; }
 .quick-add { position:absolute; bottom:0; left:0; right:0; border:0; background:#25221fe8; color:white; padding:15px; text-transform:uppercase; letter-spacing:.13em; font-size:10px; transform:translateY(100%); transition:transform .25s; }
 .quick-add span { float:right; color:#e08a69; font-size:16px; line-height:8px; }
 .product-card:hover .quick-add { transform:translateY(0); }
+/* Stay visible through the adding/added feedback cycle even if the pointer
+   leaves - .quick-add only reveals on card hover otherwise, which would hide
+   the "Adding.../Added" confirmation the instant the mouse moves away right
+   after a click, defeating the point of showing it at all. */
+.quick-add.adding, .quick-add.added { transform:translateY(0); cursor:default; }
+.quick-add.adding { background:#55504aeb; }
+.quick-add.added { background:#3d6a4aeb; }
 .product-info,.product-meta { display:flex; justify-content:space-between; align-items:center; }
 .product-info { padding-top:14px; }
 .product-info h3 { font-family:Georgia,serif; font-weight:normal; font-size:17px; margin:0 0 5px; }
@@ -110,6 +123,8 @@ footer div { display:flex; gap:20px; }
 .cart-item div { display:flex; flex-direction:column; gap:6px; font-size:12px; }
 .cart-item small { color:var(--muted); font-size:10px; }
 .cart-item strong { font-weight:normal; }
+.cart-item-remove { background:none; border:0; font-size:20px; color:var(--muted); margin-left:auto; align-self:flex-start; padding:0; line-height:1; }
+.cart-item-remove:hover { color:var(--accent); }
 .checkout { width:100%; display:flex; justify-content:space-between; margin-top:25px; }
 .auth-modal { position:relative; width:min(390px,90vw); margin:12vh auto; padding:38px; background:var(--cream); box-shadow:0 10px 40px #25221f44; }
 .auth-modal h2 { font-size:38px; margin-bottom:25px; }

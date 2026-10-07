@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   authenticatedFetch,
   extractErrorMessage,
@@ -46,6 +46,13 @@ type Order = {
 
 const FALLBACK_IMAGE = "/products/no-image.svg";
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8003";
+// Deliberate, brief pacing for the "Add to bag" button's adding -> added
+// transition - the cart write itself is synchronous (local state, no network
+// round trip), but an instant jump from "Add to bag" straight to "Added"
+// reads as no feedback at all. This is purely a perceived-affordance delay,
+// not masking any real async work.
+const ADD_FEEDBACK_ADDING_MS = 350;
+const ADD_FEEDBACK_ADDED_MS = 1100;
 
 function resolveImageUrl(value: unknown): string {
   if (typeof value !== "string" || !value.trim()) return FALLBACK_IMAGE;
@@ -157,6 +164,55 @@ function writeWishlist(next: string[]): void {
   window.dispatchEvent(new Event(STORAGE_SYNC_EVENT));
 }
 
+// Cart follows the exact same useSyncExternalStore pattern as wishlist above,
+// for the same reason: it renders into the always-visible cart-count badge,
+// so it needs a server-safe default and a post-hydration real value with no
+// mismatch in between - and it needs to survive a reload, same as the
+// customer's wishlist does, rather than vanishing the moment they refresh.
+const CART_STORAGE_KEY = "threadco_cart";
+const EMPTY_CART: CartLine[] = [];
+
+function isValidCartLine(value: unknown): value is CartLine {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === "string" &&
+    typeof record.name === "string" &&
+    typeof record.category === "string" &&
+    typeof record.price === "number" &&
+    typeof record.rating === "number" &&
+    typeof record.image === "string" &&
+    Array.isArray(record.colors) &&
+    Array.isArray(record.sizes) &&
+    typeof record.size === "string" &&
+    typeof record.color === "string"
+  );
+}
+
+let cartCache: { raw: string | null; value: CartLine[] } = { raw: null, value: EMPTY_CART };
+
+function getCartSnapshot(): CartLine[] {
+  const raw = localStorage.getItem(CART_STORAGE_KEY);
+  if (raw === cartCache.raw) return cartCache.value;
+  let value: CartLine[] = EMPTY_CART;
+  try {
+    const parsed = JSON.parse(raw ?? "null");
+    if (Array.isArray(parsed)) value = parsed.filter(isValidCartLine);
+  } catch {
+    value = EMPTY_CART;
+  }
+  cartCache = { raw, value };
+  return value;
+}
+function getCartServerSnapshot(): CartLine[] {
+  return EMPTY_CART;
+}
+
+function writeCart(next: CartLine[]): void {
+  localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(next));
+  window.dispatchEvent(new Event(STORAGE_SYNC_EVENT));
+}
+
 type ChatMessage = { role: "user" | "assistant"; content: string };
 const CHAT_STORAGE_KEY = "threadco_chat_history";
 const INITIAL_CHAT_MESSAGE: ChatMessage = {
@@ -185,10 +241,16 @@ export default function Home() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [catalog, setCatalog] = useState<Product[]>(products);
-  const [cart, setCart] = useState<CartLine[]>([]);
+  const cart = useSyncExternalStore(subscribeToStorage, getCartSnapshot, getCartServerSnapshot);
   const [cartOpen, setCartOpen] = useState(false);
   const [selections, setSelections] = useState<Record<string, { size: string; color: string }>>({});
   const [sizeErrors, setSizeErrors] = useState<Record<string, boolean>>({});
+  // Purely transient UI feedback for the "Add to bag" button (idle -> adding
+  // -> added -> idle) - never persisted, since it describes an in-flight
+  // animation, not cart data. Keyed by product id so clicking one product
+  // doesn't affect another's button state.
+  const [addStatus, setAddStatus] = useState<Record<string, "adding" | "added">>({});
+  const addTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
   const wishlist = useSyncExternalStore(subscribeToStorage, getWishlistSnapshot, getWishlistServerSnapshot);
   const [chatOpen, setChatOpen] = useState(false);
   const [chatInput, setChatInput] = useState("");
@@ -213,6 +275,16 @@ export default function Home() {
   useEffect(() => {
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory.slice(-20)));
   }, [chatHistory]);
+
+  useEffect(() => {
+    // Capture the ref's container (not the ref itself) so cleanup still has
+    // a real object to iterate, even though addTimeoutsRef.current may have
+    // been mutated further by the time this runs.
+    const timeoutsByProduct = addTimeoutsRef.current;
+    return () => {
+      Object.values(timeoutsByProduct).flat().forEach((id) => clearTimeout(id));
+    };
+  }, []);
 
   useEffect(() => {
     fetch(`${API_BASE}/products/`)
@@ -262,7 +334,30 @@ export default function Home() {
       setSizeErrors((current) => ({ ...current, [product.id]: true }));
       return;
     }
-    setCart((current) => [...current, { ...product, size: selection.size, color: selection.color }]);
+    writeCart([...cart, { ...product, size: selection.size, color: selection.color }]);
+
+    // Clear-before-set: if this product was already mid-cycle from a
+    // previous click, cancel those pending timeouts first so rapid re-clicks
+    // restart a clean idle->adding->added sequence instead of two overlapping
+    // cycles racing to update addStatus out of order.
+    (addTimeoutsRef.current[product.id] ?? []).forEach((id) => clearTimeout(id));
+    setAddStatus((current) => ({ ...current, [product.id]: "adding" }));
+    const addedTimeout = setTimeout(() => {
+      setAddStatus((current) => ({ ...current, [product.id]: "added" }));
+      const idleTimeout = setTimeout(() => {
+        setAddStatus((current) => {
+          const next = { ...current };
+          delete next[product.id];
+          return next;
+        });
+      }, ADD_FEEDBACK_ADDED_MS);
+      addTimeoutsRef.current[product.id] = [idleTimeout];
+    }, ADD_FEEDBACK_ADDING_MS);
+    addTimeoutsRef.current[product.id] = [addedTimeout];
+  };
+
+  const removeFromCart = (index: number) => {
+    writeCart(cart.filter((_, cartIndex) => cartIndex !== index));
   };
   const toggleWishlist = (productId: string) => {
     const next = wishlist.includes(productId)
@@ -422,7 +517,7 @@ export default function Home() {
         setCheckoutError(extractErrorMessage(data, "Could not place the order."));
         return;
       }
-      setCart([]);
+      writeCart([]);
       setCartOpen(false);
     } catch {
       setCheckoutError("Could not connect to the server.");
@@ -509,7 +604,13 @@ export default function Home() {
                 >
                   {wishlist.includes(product.id) ? "♥" : "♡"}
                 </button>
-                <button className="quick-add" onClick={() => addToCart(product)}>Add to bag <span>+</span></button>
+                <button
+                  className={addStatus[product.id] ? `quick-add ${addStatus[product.id]}` : "quick-add"}
+                  disabled={addStatus[product.id] === "adding"}
+                  onClick={() => addToCart(product)}
+                >
+                  {addStatus[product.id] === "adding" ? "Adding..." : addStatus[product.id] === "added" ? "Added ✓" : <>Add to bag <span>+</span></>}
+                </button>
               </div>
               <div className="product-info">
                 <div><h3>{product.name}</h3><p>{product.category}</p></div>
@@ -565,7 +666,7 @@ export default function Home() {
       <button className="chat-fab" onClick={() => setChatOpen(!chatOpen)} aria-label="Open style assistant">✦ <span>Style assistant</span></button>
       {chatOpen && <div className="chat-window"><div className="chat-header"><span><b>✦</b> Thread&Co assistant</span><button onClick={() => setChatOpen(false)}>×</button></div><div className="chat-body"><div className="chat-messages">{chatHistory.map((message, index) => <div className={message.role === "user" ? "user-message" : "bot-message"} key={`${message.role}-${index}`}>{message.content}</div>)}{chatLoading && <div className="bot-message">Finding the best style for you...</div>}</div><div className="chat-suggestions"><button onClick={() => setChatInput("Help me find an outfit")}>Help me find an outfit</button><button onClick={() => setChatInput("What's new?")}>What&apos;s new?</button></div></div><div className="chat-input"><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && sendChat()} placeholder="Ask me anything..." /><button onClick={sendChat}>↑</button></div></div>}
       {authOpen && <div className="drawer-backdrop" onClick={() => setAuthOpen(false)}><section className="auth-modal" onClick={(event) => event.stopPropagation()}><button className="auth-close" onClick={() => setAuthOpen(false)}>×</button><p className="eyebrow">WELCOME TO THREAD&CO</p><h2>{authMode === "login" ? "Welcome back." : "Create your account."}</h2>{authMode === "register" && <input value={authName} onChange={(event) => setAuthName(event.target.value)} placeholder="Your name" /> }<input type="email" value={authEmail} onChange={(event) => setAuthEmail(event.target.value)} placeholder="Email address" /><input type="password" value={authPassword} onChange={(event) => setAuthPassword(event.target.value)} placeholder="Password" />{authError && <p className="auth-error">{authError}</p>}<button className="auth-submit" onClick={submitAuth}>{authMode === "login" ? "Log in" : "Create account"}</button><button className="auth-switch" onClick={() => { setAuthMode(authMode === "login" ? "register" : "login"); setAuthError(""); }}>{authMode === "login" ? "Need an account? Sign up" : "Already have an account? Log in"}</button></section></div>}
-      {cartOpen && <div className="drawer-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={(event) => event.stopPropagation()}><div className="drawer-heading"><h2>Your bag <span>{cart.length}</span></h2><button onClick={() => setCartOpen(false)}>×</button></div>{cart.length === 0 ? <div className="empty-state"><span>♧</span><p>Your bag is waiting</p><small>Add something you love.</small></div> : <>{cart.map((item, index) => <div className="cart-item" key={`${item.id}-${item.size}-${item.color}-${index}`}><img src={item.image} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = FALLBACK_IMAGE; }} /><div><b>{item.name}</b><small>{item.category} · {item.size}{item.color ? ` · ${item.color}` : ""}</small><strong>${item.price.toFixed(2)}</strong></div></div>)}{checkoutError && <p className="auth-error">{checkoutError}</p>}<button className="checkout" disabled={checkoutLoading} onClick={checkout}>{checkoutLoading ? "Placing order..." : "Checkout"} <span>${cart.reduce((sum, item) => sum + item.price, 0).toFixed(2)}</span></button></>}</aside></div>}
+      {cartOpen && <div className="drawer-backdrop" onClick={() => setCartOpen(false)}><aside className="cart-drawer" onClick={(event) => event.stopPropagation()}><div className="drawer-heading"><h2>Your bag <span>{cart.length}</span></h2><button onClick={() => setCartOpen(false)}>×</button></div>{cart.length === 0 ? <div className="empty-state"><span>♧</span><p>Your bag is waiting</p><small>Add something you love.</small></div> : <>{cart.map((item, index) => <div className="cart-item" key={`${item.id}-${item.size}-${item.color}-${index}`}><img src={item.image} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = FALLBACK_IMAGE; }} /><div><b>{item.name}</b><small>{item.category} · {item.size}{item.color ? ` · ${item.color}` : ""}</small><strong>${item.price.toFixed(2)}</strong></div><button className="cart-item-remove" aria-label={`Remove ${item.name} from bag`} onClick={() => removeFromCart(index)}>×</button></div>)}{checkoutError && <p className="auth-error">{checkoutError}</p>}<button className="checkout" disabled={checkoutLoading} onClick={checkout}>{checkoutLoading ? "Placing order..." : "Checkout"} <span>${cart.reduce((sum, item) => sum + item.price, 0).toFixed(2)}</span></button></>}</aside></div>}
       {ordersOpen && (
         <div className="drawer-backdrop" onClick={() => setOrdersOpen(false)}>
           <aside className="cart-drawer" onClick={(event) => event.stopPropagation()}>
