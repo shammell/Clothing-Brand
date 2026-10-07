@@ -45,6 +45,18 @@ class Settings(BaseSettings):
     # deployment, not optional hardening. Left unset, only a single-process
     # deployment is safe.
     REDIS_URL: str | None = None
+    # get_remote_address reads the immediate TCP peer. Behind any reverse
+    # proxy/load balancer/CDN - the normal way to deploy this in production -
+    # that peer is always the proxy itself, collapsing every real visitor
+    # into one shared rate-limit identity: one active legitimate user would
+    # lock out everyone else behind the same proxy. 0 (default) keeps today's
+    # direct-connection behavior unchanged and safe. Set to the number of
+    # trusted reverse proxies in front of this app to instead trust that many
+    # hops of X-Forwarded-For, counted from the right (nearest proxy first) -
+    # NEVER set this unless every one of those hops is a proxy you control,
+    # since trusting a hop you don't control lets any client forge their
+    # apparent identity and bypass per-IP limiting entirely.
+    TRUSTED_PROXY_HOPS: int = 0
 
     class Config:
         env_file = ".env"
