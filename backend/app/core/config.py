@@ -35,6 +35,16 @@ class Settings(BaseSettings):
     # something to hardcode a guess for - tune both in .env.
     CHAT_GLOBAL_BURST_RATE_LIMIT: str = "40/minute"
     CHAT_GLOBAL_SUSTAINED_RATE_LIMIT: str = "1000/hour"
+    # The limiter's default storage is in-process memory - fine for a single
+    # process, but each worker/replica gets its OWN independent counters if
+    # the app ever runs as more than one process (uvicorn --workers, gunicorn,
+    # multiple container replicas). That silently turns every "global" limit
+    # above into a per-process one - the real ceiling becomes N times what's
+    # configured, with zero attacker effort. Set this to share rate-limit
+    # state across all processes via Redis; required for ANY multi-process
+    # deployment, not optional hardening. Left unset, only a single-process
+    # deployment is safe.
+    REDIS_URL: str | None = None
 
     class Config:
         env_file = ".env"
