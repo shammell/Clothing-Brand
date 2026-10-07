@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from pymongo.errors import PyMongoError
 
 from app.core.database import get_database
-from app.models.order import OrderCreate, OrderItemResponse, OrderResponse
-from app.services.auth_service import CurrentUser, get_current_user
+from app.models.order import OrderCreate, OrderItemResponse, OrderResponse, OrderStatusUpdate
+from app.services.auth_service import CurrentUser, get_current_user, require_admin
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -119,6 +119,7 @@ async def create_order(order: OrderCreate, current_user: CurrentUser = Depends(g
         "total": total,
         "status": "placed",
         "created_at": datetime.now(timezone.utc),
+        "shipping_address": order.shipping_address.model_dump(),
     }
     try:
         result = await db["orders"].insert_one(order_doc)
@@ -138,3 +139,53 @@ async def list_my_orders(current_user: CurrentUser = Depends(get_current_user)):
     db = get_database()
     orders = await db["orders"].find({"user_id": current_user["user_id"]}).sort("created_at", -1).to_list(length=100)
     return [serialize_order(order) for order in orders]
+
+
+@router.get("/", response_model=list[OrderResponse])
+async def list_all_orders(_: CurrentUser = Depends(require_admin)):
+    db = get_database()
+    orders = await db["orders"].find({}).sort("created_at", -1).to_list(length=200)
+    return [serialize_order(order) for order in orders]
+
+
+@router.patch("/{order_id}/status", response_model=OrderResponse)
+async def update_order_status(
+    order_id: str,
+    update: OrderStatusUpdate,
+    _: CurrentUser = Depends(require_admin),
+):
+    db = get_database()
+    try:
+        object_id = ObjectId(order_id)
+    except InvalidId as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid order id",
+        ) from error
+
+    order = await db["orders"].find_one({"_id": object_id})
+    if not order:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Order not found",
+        )
+
+    # Stock was reserved (decremented) at order creation. Cancelling an order
+    # that wasn't already cancelled releases that stock back - skipped if
+    # it's already cancelled, so saving the same status twice in a row can't
+    # double-credit stock.
+    if update.status == "cancelled" and order.get("status") != "cancelled":
+        products_collection = db["products"]
+        for item in order.get("items", []):
+            try:
+                product_object_id = ObjectId(item["product_id"])
+            except InvalidId:
+                continue
+            await products_collection.update_one(
+                {"_id": product_object_id},
+                {"$inc": {"stock": item["quantity"]}},
+            )
+
+    await db["orders"].update_one({"_id": object_id}, {"$set": {"status": update.status}})
+    updated = await db["orders"].find_one({"_id": object_id})
+    return serialize_order(updated)

@@ -60,6 +60,19 @@ limiter = Limiter(
     # during a Redis outage beats a full outage of login/register/chat.
     # slowapi auto-detects recovery and switches back to Redis once it's
     # reachable again.
+    #
+    # The fallback value REPLACES a route's own configured limit(s) entirely
+    # while storage is dead - it doesn't layer on top of them. An earlier
+    # version of this used "60/minute", which is actually looser than
+    # /chat/'s normal 15/minute per-IP cap, and silently drops its global
+    # burst/sustained ceilings to nothing: exactly the scenario those exist
+    # to guard against ends up with weaker protection, not stronger - a
+    # fail-open dressed up as a fail-safe. Using 5/minute instead - the
+    # strictest limit configured on any route (register's) - means no route
+    # ever gets LOOSER than normal during an outage, even though the
+    # cross-IP aggregation a global limit provides is unavoidably lost (this
+    # fallback is still per-key via get_client_identity, same as a plain
+    # per-route limit). Degraded-but-bounded, not degraded-and-loosened.
     in_memory_fallback_enabled=bool(settings.REDIS_URL),
-    in_memory_fallback=["60/minute"],
+    in_memory_fallback=["5/minute"],
 )
