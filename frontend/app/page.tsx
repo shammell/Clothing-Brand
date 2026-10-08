@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   authenticatedFetch,
   extractErrorMessage,
@@ -214,6 +214,13 @@ export default function Home() {
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [orderConfirmation, setOrderConfirmation] = useState<{ id: string; total: number } | null>(null);
+  // Persists across retries of the same checkout attempt (a dropped
+  // response, a double-click) so the backend can recognize a resend and
+  // return the order it already placed instead of creating a second one -
+  // cleared only once an order actually succeeds, so the next checkout
+  // attempt gets a fresh key. A ref, not state: it's never read during
+  // render, so it doesn't need to survive SSR.
+  const checkoutIdempotencyKeyRef = useRef<string | null>(null);
 
   useEffect(() => {
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory.slice(-20)));
@@ -409,9 +416,12 @@ export default function Home() {
         size: item.size,
         color: item.color,
       }));
+      if (!checkoutIdempotencyKeyRef.current) {
+        checkoutIdempotencyKeyRef.current = crypto.randomUUID();
+      }
       const response = await authenticatedFetch(`${API_BASE}/orders/`, authToken, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", "Idempotency-Key": checkoutIdempotencyKeyRef.current },
         body: JSON.stringify({
           items,
           shipping_address: {
@@ -441,6 +451,7 @@ export default function Home() {
       writeCart([]);
       setShippingAddress(EMPTY_SHIPPING_ADDRESS);
       setOrderConfirmation({ id: data.id, total: data.total });
+      checkoutIdempotencyKeyRef.current = null;
       if (authToken) fetchOrders(authToken);
     } catch {
       setCheckoutError("Could not connect to the server.");

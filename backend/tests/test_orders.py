@@ -243,6 +243,67 @@ def test_cancelling_order_restores_stock(client, auth_headers, admin_headers, se
     assert client.get(f"/products/{product_id}").json()["stock"] == 10
 
 
+def test_create_order_with_same_idempotency_key_returns_same_order(client, auth_headers, seed_product):
+    product_id = seed_product(stock=10)
+    headers = {**auth_headers, "Idempotency-Key": "test-key-123"}
+    payload = {
+        "items": [{"product_id": product_id, "quantity": 2, "size": "S", "color": "Black"}],
+        "shipping_address": SAMPLE_ADDRESS,
+    }
+
+    first = client.post("/orders/", headers=headers, json=payload)
+    second = client.post("/orders/", headers=headers, json=payload)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] == second.json()["id"]
+
+    # Stock decremented only once - the second call returned the first
+    # order instead of placing a new one.
+    assert client.get(f"/products/{product_id}").json()["stock"] == 8
+
+
+def test_create_order_without_idempotency_key_allows_separate_orders(client, auth_headers, seed_product):
+    product_id = seed_product(stock=10)
+    payload = {
+        "items": [{"product_id": product_id, "quantity": 1, "size": "S", "color": "Black"}],
+        "shipping_address": SAMPLE_ADDRESS,
+    }
+
+    first = client.post("/orders/", headers=auth_headers, json=payload)
+    second = client.post("/orders/", headers=auth_headers, json=payload)
+
+    assert first.status_code == 201
+    assert second.status_code == 201
+    assert first.json()["id"] != second.json()["id"]
+    assert client.get(f"/products/{product_id}").json()["stock"] == 8
+
+
+def test_idempotency_key_is_scoped_per_user(client, register_user, seed_product):
+    product_id = seed_product(stock=10)
+    alice_token = register_user(username="Alice", email="alice-idem@example.com", password="alicepass1").json()["access_token"]
+    bob_token = register_user(username="Bob", email="bob-idem@example.com", password="bobpass123").json()["access_token"]
+    payload = {
+        "items": [{"product_id": product_id, "quantity": 1, "size": "S", "color": "Black"}],
+        "shipping_address": SAMPLE_ADDRESS,
+    }
+
+    alice_response = client.post(
+        "/orders/",
+        headers={"Authorization": f"Bearer {alice_token}", "Idempotency-Key": "shared-key"},
+        json=payload,
+    )
+    bob_response = client.post(
+        "/orders/",
+        headers={"Authorization": f"Bearer {bob_token}", "Idempotency-Key": "shared-key"},
+        json=payload,
+    )
+
+    assert alice_response.status_code == 201
+    assert bob_response.status_code == 201
+    assert alice_response.json()["id"] != bob_response.json()["id"]
+
+
 def test_cancelling_twice_does_not_double_restore_stock(client, auth_headers, admin_headers, seed_product):
     product_id = seed_product(stock=10)
     order = client.post(

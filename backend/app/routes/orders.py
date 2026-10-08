@@ -2,8 +2,8 @@ from datetime import datetime, timezone
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Depends, HTTPException, status
-from pymongo.errors import PyMongoError
+from fastapi import APIRouter, Depends, Header, HTTPException, status
+from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.core.database import get_database
 from app.models.order import OrderCreate, OrderItemResponse, OrderResponse, OrderStatusUpdate
@@ -19,9 +19,26 @@ def serialize_order(order: dict) -> dict:
 
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
-async def create_order(order: OrderCreate, current_user: CurrentUser = Depends(get_current_user)):
+async def create_order(
+    order: OrderCreate,
+    current_user: CurrentUser = Depends(get_current_user),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+):
     db = get_database()
     products_collection = db["products"]
+
+    # A retried checkout (double-click, or the client re-sending after a
+    # dropped response) carries the same key as the original attempt - if
+    # that attempt already created an order, return it unchanged instead of
+    # placing (and double-decrementing stock for) a second one. Scoped by
+    # user_id, not just the key alone, so two different users can never
+    # collide on the same client-generated key.
+    if idempotency_key:
+        existing_order = await db["orders"].find_one(
+            {"user_id": current_user["user_id"], "idempotency_key": idempotency_key}
+        )
+        if existing_order:
+            return serialize_order(existing_order)
 
     for item in order.items:
         try:
@@ -121,8 +138,30 @@ async def create_order(order: OrderCreate, current_user: CurrentUser = Depends(g
         "created_at": datetime.now(timezone.utc),
         "shipping_address": order.shipping_address.model_dump(),
     }
+    # Only set when provided, never to None/null - the partial unique index
+    # on (user_id, idempotency_key) only covers documents where the field
+    # exists, so a stored null here would start colliding across unrelated
+    # no-key orders from the same user.
+    if idempotency_key:
+        order_doc["idempotency_key"] = idempotency_key
     try:
         result = await db["orders"].insert_one(order_doc)
+    except DuplicateKeyError:
+        # Lost a race against a concurrent request carrying the same key
+        # (both passed the find_one check above before either had inserted).
+        # The stock this call reserved was never actually used - release it
+        # and hand back whichever order the winner created.
+        for object_id, quantity in decremented:
+            await products_collection.update_one(
+                {"_id": object_id},
+                {"$inc": {"stock": quantity}},
+            )
+        winning_order = await db["orders"].find_one(
+            {"user_id": current_user["user_id"], "idempotency_key": idempotency_key}
+        )
+        if winning_order:
+            return serialize_order(winning_order)
+        raise
     except PyMongoError:
         for object_id, quantity in decremented:
             await products_collection.update_one(
