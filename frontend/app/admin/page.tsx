@@ -13,7 +13,7 @@ import {
   writeAuth,
 } from "@/lib/auth-store";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8003";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 type Product = {
   id: string;

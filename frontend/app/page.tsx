@@ -72,7 +72,7 @@ const REQUIRED_SHIPPING_FIELDS: Array<keyof ShippingAddressForm> = [
   "country",
 ];
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8003";
+const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 const products: Product[] = [
   {
