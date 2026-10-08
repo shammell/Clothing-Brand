@@ -58,3 +58,20 @@ def test_email_is_case_insensitive(client, register_user):
     register_user(email="Mixed.Case@Example.com", password="correctpass1")
     response = client.post("/auth/login", json={"email": "mixed.case@example.com", "password": "correctpass1"})
     assert response.status_code == 200
+
+
+def test_get_current_user_defaults_missing_role_to_customer(client, register_user):
+    # Simulates a pre-migration JWT that has no "role" claim at all.
+    import jose.jwt as jose_jwt
+    from app.core.config import settings
+
+    register_user(email="legacy@example.com")
+    legacy_token = jose_jwt.encode(
+        {"user_id": "000000000000000000000000", "email": "legacy@example.com"},
+        settings.JWT_SECRET_KEY,
+        algorithm=settings.JWT_ALGORITHM,
+    )
+    response = client.get("/orders/me", headers={"Authorization": f"Bearer {legacy_token}"})
+    # Must not 500 - falls back to role="customer" and proceeds (empty list, since no orders).
+    assert response.status_code == 200
+    assert response.json() == []

@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import TypedDict
+from typing import Callable, TypedDict
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -48,7 +48,7 @@ def decode_token(token: str) -> dict:
 class CurrentUser(TypedDict):
     user_id: str
     email: str
-    is_admin: bool
+    role: str
 
 
 def get_current_user(
@@ -74,13 +74,28 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
-    return CurrentUser(user_id=user_id, email=email, is_admin=bool(payload.get("is_admin", False)))
+    # Tokens issued before the role migration carry no "role" claim at all -
+    # default to the least-privileged role rather than raising, so a
+    # pre-existing session degrades gracefully to customer-level access.
+    return CurrentUser(user_id=user_id, email=email, role=str(payload.get("role", "customer")))
 
 
 def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-    if not current_user["is_admin"]:
+    if current_user["role"] != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
         )
     return current_user
+
+
+def require_role(*roles: str) -> Callable[[CurrentUser], CurrentUser]:
+    def _check(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if current_user["role"] not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return current_user
+
+    return _check
