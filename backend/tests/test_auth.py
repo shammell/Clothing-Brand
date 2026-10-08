@@ -8,7 +8,18 @@ def test_register_creates_user_and_returns_token(client):
     assert body["access_token"]
     assert body["user"]["email"] == "jane@example.com"
     assert body["user"]["username"] == "Jane Doe"
-    assert body["user"]["is_admin"] is False
+    assert body["user"]["role"] == "customer"
+
+
+def test_register_returns_role_not_is_admin(client):
+    response = client.post(
+        "/auth/register",
+        json={"username": "Role Test", "email": "roletest@example.com", "password": "testpass123"},
+    )
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user"]["role"] == "customer"
+    assert "is_admin" not in body["user"]
 
 
 def test_register_duplicate_email_rejected(register_user):
