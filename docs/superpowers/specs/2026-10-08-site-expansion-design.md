@@ -311,6 +311,54 @@ pattern to copy for `app/orders/[id]/page.tsx`. Per
 `frontend/AGENTS.md`, consult `node_modules/next/dist/docs/01-app/` for
 any App Router API this spec doesn't already pin down.
 
+## UI/UX & Micro-interaction Guidelines
+
+Confirmed with user: micro-animations only (urgency/scarcity badges,
+social-proof, and skeleton-loading states were offered and explicitly
+not selected — out of scope for this round). Goal is "comfortable and
+alive," not flashy: every new page built in this spec should feel
+consistent with these rules, not bolt them on after the fact.
+
+- **No new dependency.** Plain CSS `transition`/`@keyframes` in
+  `globals.css`, matching the existing hand-written CSS approach (badges,
+  size chips, etc. already work this way) — no Framer Motion or similar,
+  since "thori bhot" (a little, not a lot) doesn't justify a new bundle
+  dependency.
+- **Interactive elements** (buttons, links, cards): a short
+  transform/opacity transition on hover and active state —
+  `transition: transform 150ms ease, box-shadow 150ms ease;` with a
+  subtle `scale(1.02)`/lift on hover and `scale(0.98)` on active (press)
+  feedback. Applied via a shared CSS class (e.g. `.interactive`), not
+  copy-pasted per component.
+- **Add-to-cart feedback**: `useAddToCart.ts` already drives an
+  "adding → added" status state machine (`ADD_FEEDBACK_ADDING_MS`/
+  `ADD_FEEDBACK_ADDED_MS`) — this spec adds a visual layer on top of the
+  *existing* state, not a new timing mechanism: the button swaps to a
+  checkmark icon with a brief scale-in during "added", and the cart icon
+  in the header gets a one-shot bounce/pulse keyframe triggered off the
+  same cart-write event (`STORAGE_SYNC_EVENT`).
+- **Scroll-reveal**: a small shared `useInViewport` hook
+  (`IntersectionObserver`, no library) that toggles a `.is-visible` class
+  on first intersection — used for section entrances on `/`, `/shop`,
+  `/about` (fade + slight translate-up, ~400ms). Not applied to
+  above-the-fold content (nothing should be invisible on first paint).
+- **Form feedback**: input `border-color`/`box-shadow` transition on
+  focus; submit buttons show an inline spinner and disable themselves
+  while a request is in flight (`/login`, `/register`, `/checkout`,
+  `/checkout/payment`) instead of the current pattern of just waiting
+  with no feedback.
+- **Toasts over `alert()`**: anywhere the current code uses a plain
+  error string in the UI (not an actual `alert()` call today, but
+  equivalent inline-text error patterns), keep that — this spec does not
+  introduce a toast/notification system; that would be new
+  infrastructure the user didn't ask for. "Added to cart" feedback is
+  the button state change described above, which already serves that
+  purpose.
+
+These rules apply within each page task below; they are not a separate
+task, since animation without the page it decorates isn't independently
+testable.
+
 ## Testing Strategy
 
 - Backend: TDD per existing convention (see `test_orders.py` for style).
