@@ -1,3 +1,6 @@
+from datetime import datetime, timezone
+
+
 def test_register_creates_user_and_returns_token(client):
     response = client.post(
         "/auth/register",
@@ -75,3 +78,57 @@ def test_get_current_user_defaults_missing_role_to_customer(client, register_use
     # Must not 500 - falls back to role="customer" and proceeds (empty list, since no orders).
     assert response.status_code == 200
     assert response.json() == []
+
+
+def test_register_sets_customer_role_and_created_at(client):
+    response = client.post(
+        "/auth/register",
+        json={"username": "New User", "email": "newuser@example.com", "password": "testpass123"},
+    )
+    assert response.json()["user"]["role"] == "customer"
+
+
+def test_blocked_user_cannot_log_in(client, register_user):
+    from motor.motor_asyncio import AsyncIOMotorClient
+    import asyncio
+    from app.core.config import settings
+
+    register_user(email="blocked@example.com", password="blockedpass1")
+
+    async def _block():
+        db_client = AsyncIOMotorClient(settings.MONGODB_URL)
+        try:
+            await db_client[settings.DB_NAME]["users"].update_one(
+                {"email": "blocked@example.com"}, {"$set": {"is_blocked": True}}
+            )
+        finally:
+            db_client.close()
+
+    asyncio.run(_block())
+
+    response = client.post("/auth/login", json={"email": "blocked@example.com", "password": "blockedpass1"})
+    assert response.status_code == 403
+    assert "blocked" in response.json()["detail"].lower()
+
+
+def test_wrong_password_on_blocked_account_still_says_invalid_credentials(client, register_user):
+    from motor.motor_asyncio import AsyncIOMotorClient
+    import asyncio
+    from app.core.config import settings
+
+    register_user(email="blocked2@example.com", password="blockedpass1")
+
+    async def _block():
+        db_client = AsyncIOMotorClient(settings.MONGODB_URL)
+        try:
+            await db_client[settings.DB_NAME]["users"].update_one(
+                {"email": "blocked2@example.com"}, {"$set": {"is_blocked": True}}
+            )
+        finally:
+            db_client.close()
+
+    asyncio.run(_block())
+
+    response = client.post("/auth/login", json={"email": "blocked2@example.com", "password": "wrongpass"})
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid email or password"
