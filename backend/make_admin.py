@@ -20,7 +20,7 @@ async def make_admin(email: str) -> None:
         database = client[DB_NAME]
         result = await database["users"].update_one(
             {"email": email.lower()},
-            {"$set": {"is_admin": True}},
+            {"$set": {"role": "admin"}},
         )
         if result.matched_count == 0:
             print(f"No user found with email {email}. Register the account first.")
