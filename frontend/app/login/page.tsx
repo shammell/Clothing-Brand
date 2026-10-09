@@ -4,13 +4,14 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useSyncExternalStore } from "react";
 import { getAuthServerSnapshot, getCurrentUserSnapshot, subscribeToStorage } from "@/lib/auth-store";
+import { safeNextPath } from "@/lib/safeNextPath";
 import { useAuthForm } from "@/lib/useAuthForm";
 
 function LoginPageContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
-  const next = searchParams.get("next") || "/account";
+  const next = safeNextPath(searchParams.get("next"));
   const { email, setEmail, password, setPassword, error, loading, submit } = useAuthForm("login", () => router.push(next));
 
   useEffect(() => {
