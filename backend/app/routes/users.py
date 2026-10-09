@@ -16,7 +16,7 @@ def serialize_user(user: dict) -> dict:
         "email": user["email"],
         "role": user.get("role", "customer"),
         "is_blocked": user.get("is_blocked", False),
-        "created_at": user["created_at"],
+        "created_at": user.get("created_at"),
     }
 
 
@@ -40,9 +40,9 @@ async def update_user_role(
     update: UserRoleUpdate,
     current_user: CurrentUser = Depends(require_admin),
 ):
-    if user_id == current_user["user_id"]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change your own role")
     object_id = parse_user_id(user_id)
+    if object_id == ObjectId(current_user["user_id"]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change your own role")
     db = get_database()
     result = await db["users"].find_one_and_update(
         {"_id": object_id}, {"$set": {"role": update.role}}
@@ -59,9 +59,9 @@ async def update_user_block(
     update: UserBlockUpdate,
     current_user: CurrentUser = Depends(require_admin),
 ):
-    if user_id == current_user["user_id"]:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot block your own account")
     object_id = parse_user_id(user_id)
+    if object_id == ObjectId(current_user["user_id"]):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot block your own account")
     db = get_database()
     result = await db["users"].find_one_and_update(
         {"_id": object_id}, {"$set": {"is_blocked": update.is_blocked}}

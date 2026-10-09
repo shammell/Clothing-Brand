@@ -7,9 +7,17 @@ Run once, manually, after deploying Phase 1's backend code:
     cd backend && python scripts/migrate_user_roles.py
 """
 import asyncio
+import sys
 from datetime import datetime, timezone
+from pathlib import Path
 
 from motor.motor_asyncio import AsyncIOMotorClient
+
+# Make `app` importable regardless of how this script is invoked. Running it
+# as documented above (`python scripts/migrate_user_roles.py` from `backend/`)
+# puts `backend/scripts` on sys.path, not `backend/` itself, so without this
+# `from app.core.config import settings` below fails with ModuleNotFoundError.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import settings
 
@@ -19,7 +27,14 @@ async def migrate() -> None:
     try:
         users = client[settings.DB_NAME]["users"]
 
-        admin_result = await users.update_many({"is_admin": True}, {"$set": {"role": "admin"}})
+        # "role": {"$exists": False} guards against re-promoting someone who
+        # was deliberately demoted through the API between deploy and
+        # migration: their document would still have a stale is_admin: True,
+        # but it now also has a role the new code already set, which this
+        # migration must not stomp on.
+        admin_result = await users.update_many(
+            {"is_admin": True, "role": {"$exists": False}}, {"$set": {"role": "admin"}}
+        )
         customer_result = await users.update_many(
             {"is_admin": {"$ne": True}, "role": {"$exists": False}},
             {"$set": {"role": "customer"}},

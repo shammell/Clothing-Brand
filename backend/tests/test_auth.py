@@ -102,6 +102,28 @@ def test_get_current_user_defaults_missing_role_to_customer(client):
     assert response.status_code == 200
     assert response.json() == []
 
+    # /orders/me alone doesn't prove the fallback is actually "customer" and
+    # not some more privileged default - any role could reach it. Hitting a
+    # role-gated route (admin/lister only) with the same legacy token and
+    # getting 403 proves the fallback really does resolve to the
+    # least-privileged role.
+    create_response = client.post(
+        "/products/",
+        headers={"Authorization": f"Bearer {legacy_token}"},
+        json={
+            "name": "Legacy Token Product",
+            "description": "Should be rejected",
+            "price": 10.0,
+            "category": "T-Shirts",
+            "brand": "TestBrand",
+            "sizes": ["S"],
+            "colors": ["Black"],
+            "image_url": "/products/no-image.svg",
+            "stock": 1,
+        },
+    )
+    assert create_response.status_code == 403
+
 
 def test_register_sets_customer_role_and_created_at(client):
     response = client.post(
@@ -155,3 +177,53 @@ def test_wrong_password_on_blocked_account_still_says_invalid_credentials(client
     response = client.post("/auth/login", json={"email": "blocked2@example.com", "password": "wrongpass"})
     assert response.status_code == 401
     assert response.json()["detail"] == "Invalid email or password"
+
+
+def test_blocking_user_revokes_access_for_their_existing_token(client, register_user, admin_headers):
+    # get_current_user re-fetches is_blocked from the DB on every request
+    # instead of trusting the JWT claim, specifically so a block made after
+    # a token was issued takes effect immediately rather than waiting out
+    # the token's expiry. This proves that property, not just that blocking
+    # works at all.
+    register_response = register_user(username="To Block", email="tobeblocked@example.com", password="tobepass123")
+    original_token = register_response.json()["access_token"]
+
+    users = client.get("/users/", headers=admin_headers).json()
+    target_id = next(u["id"] for u in users if u["email"] == "tobeblocked@example.com")
+    block_response = client.patch(f"/users/{target_id}/block", headers=admin_headers, json={"is_blocked": True})
+    assert block_response.status_code == 200
+
+    response = client.get("/orders/me", headers={"Authorization": f"Bearer {original_token}"})
+    assert response.status_code == 403
+
+
+def test_demoting_admin_revokes_admin_access_for_their_existing_token(
+    client, register_user, make_admin
+):
+    # Same property as the blocking test above, but for a role downgrade:
+    # a demoted admin's pre-existing token must lose admin access on its
+    # very next request, not just after re-login.
+    register_response = register_user(username="First Admin", email="firstadmin@example.com", password="firstpass123")
+    make_admin("firstadmin@example.com")
+    login_response = client.post(
+        "/auth/login", json={"email": "firstadmin@example.com", "password": "firstpass123"}
+    )
+    first_admin_token = login_response.json()["access_token"]
+    first_admin_headers = {"Authorization": f"Bearer {first_admin_token}"}
+
+    register_user(username="Second Admin", email="secondadmin@example.com", password="secondpass123")
+    make_admin("secondadmin@example.com")
+    second_login_response = client.post(
+        "/auth/login", json={"email": "secondadmin@example.com", "password": "secondpass123"}
+    )
+    second_admin_headers = {"Authorization": f"Bearer {second_login_response.json()['access_token']}"}
+
+    users = client.get("/users/", headers=second_admin_headers).json()
+    first_admin_id = next(u["id"] for u in users if u["email"] == "firstadmin@example.com")
+    demote_response = client.patch(
+        f"/users/{first_admin_id}/role", headers=second_admin_headers, json={"role": "customer"}
+    )
+    assert demote_response.status_code == 200
+
+    response = client.get("/users/", headers=first_admin_headers)
+    assert response.status_code == 403

@@ -62,3 +62,27 @@ def test_admin_cannot_block_self(client, admin_headers):
 
     response = client.patch(f"/users/{self_id}/block", headers=admin_headers, json={"is_blocked": True})
     assert response.status_code == 400
+
+
+def test_admin_cannot_demote_self_with_uppercase_id(client, admin_headers):
+    # ObjectId is case-insensitive on its hex string (ObjectId(s.upper()) ==
+    # ObjectId(s)), but the self-demote guard must not compare the raw id
+    # strings before parsing - otherwise an admin could send their own id
+    # with different casing to slip past the guard and demote themselves.
+    users = client.get("/users/", headers=admin_headers).json()
+    self_id = next(u["id"] for u in users if u["email"] == "admin@example.com")
+
+    response = client.patch(
+        f"/users/{self_id.upper()}/role", headers=admin_headers, json={"role": "customer"}
+    )
+    assert response.status_code == 400
+
+
+def test_admin_cannot_block_self_with_uppercase_id(client, admin_headers):
+    users = client.get("/users/", headers=admin_headers).json()
+    self_id = next(u["id"] for u in users if u["email"] == "admin@example.com")
+
+    response = client.patch(
+        f"/users/{self_id.upper()}/block", headers=admin_headers, json={"is_blocked": True}
+    )
+    assert response.status_code == 400

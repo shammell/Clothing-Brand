@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Literal, Optional
 
 from pydantic import BaseModel, EmailStr, Field
 
@@ -36,7 +36,14 @@ class UserSummary(BaseModel):
     email: EmailStr
     role: UserRole
     is_blocked: bool
-    created_at: datetime
+    # Defaulted, unlike a freshly registered user's always-present field:
+    # documents that haven't been through the Task 7 migration yet (the
+    # deploy-to-migration gap this phase creates) have no created_at, and
+    # GET /users/ and the PATCH routes' responses must keep rendering those,
+    # not 500 on them. Matches the established pattern for other backfilled
+    # fields - see OrderItemResponse.size/color and
+    # OrderResponse.shipping_address in app/models/order.py.
+    created_at: Optional[datetime] = None
 
 
 class UserRoleUpdate(BaseModel):

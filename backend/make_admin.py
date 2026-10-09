@@ -25,7 +25,7 @@ async def make_admin(email: str) -> None:
         if result.matched_count == 0:
             print(f"No user found with email {email}. Register the account first.")
         else:
-            print(f"{email} is now an admin. They must log in again to get a fresh token.")
+            print(f"{email} is now an admin. The change takes effect on their next request.")
     finally:
         client.close()
 

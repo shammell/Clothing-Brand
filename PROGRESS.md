@@ -26,8 +26,9 @@ the end) for Phases 2, 4, 5.
 
 ## Where things stand right now
 
-**Phase 1 is in progress**, running via `superpowers:subagent-driven-development`
-in an isolated git worktree:
+**Phase 1 is complete**, including the final whole-branch review's fix
+wave, run via `superpowers:subagent-driven-development` in an isolated
+git worktree:
 
 - Worktree: `C:\Users\USER\clothing store\.claude\worktrees\phase1-role-backend`
 - Branch: `worktree-phase1-role-backend` (not yet merged to `main`)
@@ -41,10 +42,26 @@ Task-by-task status (Phase 1 has 7 tasks total):
 | 1. User model (`role`, `is_blocked`, `created_at`) | ✅ complete, review clean | `760811e` | — |
 | 2. `auth_service.py` role claim + `require_role` | ✅ complete, review clean | `5e15882` | Full suite intentionally red here (34 pass/6 fail) — expected |
 | 3. `auth.py` routes — register/login use role, blocking | ✅ complete, review clean | `f343abe` | Full suite still 6 failing — root cause below, fixed by Task 4 |
-| 4. `conftest.py` fixtures (`make_admin`→role, add `make_lister`) | ⬜ **not started — resume here** | — | **This is the task that actually fixes the 6 failing tests** |
-| 5. Lister product permissions (`products.py`) | ⬜ not started | — | — |
-| 6. Admin Users API (new `routes/users.py`) | ⬜ not started | — | — |
-| 7. Production migration script | ⬜ not started | — | One-time, run by hand against Atlas after deploy — not part of the test suite |
+| 4. `conftest.py` fixtures (`make_admin`→role, add `make_lister`) | ✅ complete, review clean | `0094645` | Fixed the 6 failing tests |
+| 5. Lister product permissions (`products.py`) | ✅ complete, review clean | `4920e9c` | — |
+| 6. Admin Users API (new `routes/users.py`) | ✅ complete, review clean | `b4b304e` | — |
+| 7. Production migration script | ✅ complete, review clean | `cb72f94` | One-time, run by hand against Atlas after deploy — not part of the test suite |
+
+All 7 tasks passed their own task-scoped review, and the final
+whole-branch review's findings were fixed in a consolidated wave after
+Task 7 (see `.superpowers/sdd/2026-10-08-phase1-role-backend/final-fix-report.md`
+for the detail).
+
+## Deployment note
+
+**Phase 1 is backend-only and must NOT be deployed to production on
+its own.** The frontend admin UI (`frontend/app/page.tsx`,
+`frontend/app/admin/page.tsx`) still reads `is_admin` from the login
+response, which Phase 1's backend no longer sends (it sends `role`
+instead). Deploying Phase 1 alone would make every admin appear as a
+non-admin in the UI until Phase 2 (frontend role wiring) also ships.
+Phase 1 and Phase 2 must go out together, or Phase 1 held back until
+Phase 2 is ready.
 
 **Why the suite is red right now, and why that's expected, not a bug:**
 Tasks 1-3 updated the model, the JWT-reading code, and the auth routes
