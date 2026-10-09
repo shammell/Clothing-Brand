@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 import { getAuthServerSnapshot, getCurrentUserSnapshot, subscribeToStorage } from "@/lib/auth-store";
 import { safeNextPath } from "@/lib/safeNextPath";
 import { useAuthForm } from "@/lib/useAuthForm";
@@ -12,10 +12,18 @@ function RegisterPageContent() {
   const searchParams = useSearchParams();
   const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
   const next = safeNextPath(searchParams.get("next"));
-  const { name, setName, email, setEmail, password, setPassword, error, loading, submit } = useAuthForm("register", () => router.push(next));
+  // See the matching comment in app/login/page.tsx: without this flag the
+  // already-authenticated effect's hardcoded /account replace races (and
+  // wins over) the push to `next` that a just-completed registration does
+  // itself, silently discarding ?next=/cart (or any other destination).
+  const justSubmittedRef = useRef(false);
+  const { name, setName, email, setEmail, password, setPassword, error, loading, submit } = useAuthForm("register", () => {
+    justSubmittedRef.current = true;
+    router.push(next);
+  });
 
   useEffect(() => {
-    if (currentUser) router.replace("/account");
+    if (currentUser && !justSubmittedRef.current) router.replace("/account");
   }, [currentUser, router]);
 
   if (currentUser) return null;

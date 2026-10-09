@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useSyncExternalStore } from "react";
+import { Suspense, useEffect, useRef, useSyncExternalStore } from "react";
 import { getAuthServerSnapshot, getCurrentUserSnapshot, subscribeToStorage } from "@/lib/auth-store";
 import { safeNextPath } from "@/lib/safeNextPath";
 import { useAuthForm } from "@/lib/useAuthForm";
@@ -12,10 +12,20 @@ function LoginPageContent() {
   const searchParams = useSearchParams();
   const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
   const next = safeNextPath(searchParams.get("next"));
-  const { email, setEmail, password, setPassword, error, loading, submit } = useAuthForm("login", () => router.push(next));
+  // A login just submitted from this form already navigates to `next` itself
+  // (below) - without this flag, writeAuth's storage-sync event flips
+  // currentUser true on the next render, which re-fires the
+  // already-authenticated effect and its hardcoded /account replace races
+  // the push to `next` (and reliably wins, since it fires after), silently
+  // discarding ?next=/cart (or any other destination) in favor of /account.
+  const justSubmittedRef = useRef(false);
+  const { email, setEmail, password, setPassword, error, loading, submit } = useAuthForm("login", () => {
+    justSubmittedRef.current = true;
+    router.push(next);
+  });
 
   useEffect(() => {
-    if (currentUser) router.replace("/account");
+    if (currentUser && !justSubmittedRef.current) router.replace("/account");
   }, [currentUser, router]);
 
   if (currentUser) return null;
