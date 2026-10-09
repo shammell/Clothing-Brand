@@ -49,6 +49,17 @@ type Order = {
 
 const ORDER_STATUSES = ["placed", "processing", "shipped", "delivered", "cancelled"] as const;
 
+type UserSummary = {
+  id: string;
+  username: string;
+  email: string;
+  role: "customer" | "lister" | "admin";
+  is_blocked: boolean;
+  created_at: string;
+};
+
+const ROLES = ["customer", "lister", "admin"] as const;
+
 const inputClass = "border border-neutral-300 px-3 py-2 text-sm w-full";
 
 export default function AdminPage() {
@@ -66,7 +77,81 @@ export default function AdminPage() {
   const [ordersError, setOrdersError] = useState("");
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
 
+  const [users, setUsers] = useState<UserSummary[]>([]);
+  const [usersLoading, setUsersLoading] = useState(false);
+  const [usersError, setUsersError] = useState("");
+  const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
+
   const logout = () => writeAuth("", "");
+
+  const loadUsers = async () => {
+    setUsersLoading(true);
+    setUsersError("");
+    try {
+      const response = await authenticatedFetch(`${API_BASE}/users/`, authToken);
+      if (response.status === 401) {
+        logout();
+        setUsersError("Your session expired. Please log in again.");
+        return;
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        setUsersError(extractErrorMessage(data, "Could not load users."));
+        return;
+      }
+      setUsers(data as UserSummary[]);
+    } catch {
+      setUsersError("Could not connect to the server.");
+    } finally {
+      setUsersLoading(false);
+    }
+  };
+
+  const updateUserRole = async (userId: string, role: string) => {
+    setUpdatingUserId(userId);
+    setUsersError("");
+    try {
+      const response = await authenticatedFetch(`${API_BASE}/users/${userId}/role`, authToken, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ role }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        // Covers the self-demotion 400 from the backend - surfaced here
+        // rather than pre-disabled client-side (see plan's Global Constraints).
+        setUsersError(extractErrorMessage(data, "Could not update role."));
+        return;
+      }
+      setUsers((current) => current.map((user) => (user.id === userId ? (data as UserSummary) : user)));
+    } catch {
+      setUsersError("Could not connect to the server.");
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const updateUserBlock = async (userId: string, isBlocked: boolean) => {
+    setUpdatingUserId(userId);
+    setUsersError("");
+    try {
+      const response = await authenticatedFetch(`${API_BASE}/users/${userId}/block`, authToken, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ is_blocked: isBlocked }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setUsersError(extractErrorMessage(data, "Could not update block status."));
+        return;
+      }
+      setUsers((current) => current.map((user) => (user.id === userId ? (data as UserSummary) : user)));
+    } catch {
+      setUsersError("Could not connect to the server.");
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
 
   const loadOrders = async () => {
     setOrdersLoading(true);
@@ -125,11 +210,12 @@ export default function AdminPage() {
     // equivalent exists for an on-demand network fetch.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOrders();
-    // loadOrders is intentionally omitted: it's a plain function recreated
-    // every render, not memoized, so including it would re-run this effect
-    // (and re-fetch) on every render instead of only when admin access is
-    // first confirmed - role is the only actual trigger this effect cares
-    // about.
+    loadUsers();
+    // loadOrders/loadUsers are intentionally omitted: they're plain
+    // functions recreated every render, not memoized, so including them
+    // would re-run this effect (and re-fetch) on every render instead of
+    // only when admin access is first confirmed - role is the only actual
+    // trigger this effect cares about.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
@@ -265,6 +351,64 @@ export default function AdminPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          )}
+        </section>
+
+        <section className="bg-white border border-neutral-200 p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-lg font-medium text-neutral-900">Users ({users.length})</h2>
+            <button onClick={loadUsers} className="text-sm underline">Refresh</button>
+          </div>
+          {usersLoading && <p className="text-sm text-neutral-500">Loading...</p>}
+          {!usersLoading && usersError && <p className="text-sm text-red-600">{usersError}</p>}
+          {!usersLoading && !usersError && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-neutral-500 border-b border-neutral-200">
+                    <th className="py-2 pr-4">Username</th>
+                    <th className="py-2 pr-4">Email</th>
+                    <th className="py-2 pr-4">Role</th>
+                    <th className="py-2 pr-4">Status</th>
+                    <th className="py-2 pr-4" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {users.map((user) => (
+                    <tr key={user.id} className="border-b border-neutral-100">
+                      <td className="py-2 pr-4">{user.username}</td>
+                      <td className="py-2 pr-4">{user.email}</td>
+                      <td className="py-2 pr-4">
+                        <select
+                          value={user.role}
+                          disabled={updatingUserId === user.id}
+                          onChange={(event) => updateUserRole(user.id, event.target.value)}
+                          className="border border-neutral-300 px-2 py-1 text-sm disabled:opacity-60"
+                        >
+                          {ROLES.map((roleOption) => (
+                            <option key={roleOption} value={roleOption}>{roleOption}</option>
+                          ))}
+                        </select>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <span className={user.is_blocked ? "text-red-600 font-medium" : "text-neutral-500"}>
+                          {user.is_blocked ? "Blocked" : "Active"}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <button
+                          onClick={() => updateUserBlock(user.id, !user.is_blocked)}
+                          disabled={updatingUserId === user.id}
+                          className="underline disabled:opacity-60"
+                        >
+                          {user.is_blocked ? "Unblock" : "Block"}
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </section>
