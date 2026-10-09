@@ -7,7 +7,7 @@
 export const STORAGE_SYNC_EVENT = "threadco-storage-sync";
 const AUTH_USER_KEY = "threadco_user";
 const AUTH_TOKEN_KEY = "threadco_token";
-const AUTH_IS_ADMIN_KEY = "threadco_is_admin";
+const AUTH_ROLE_KEY = "threadco_role";
 
 export function subscribeToStorage(callback: () => void) {
   window.addEventListener("storage", callback);
@@ -28,28 +28,37 @@ export function getAuthServerSnapshot(): string {
   return "";
 }
 
-// Separate from getAuthServerSnapshot's string default since this snapshot
-// is a boolean - same server/client-mismatch reasoning as the rest of this
-// module, just a different value type.
-export function getIsAdminSnapshot(): boolean {
-  return localStorage.getItem(AUTH_IS_ADMIN_KEY) === "true";
+// Separate from getAuthServerSnapshot's string default even though both
+// are strings - same server/client-mismatch reasoning as the rest of
+// this module, kept as its own snapshot pair so callers can subscribe to
+// role changes independently of the username.
+export function getRoleSnapshot(): string {
+  return localStorage.getItem(AUTH_ROLE_KEY) || "customer";
 }
-export function getIsAdminServerSnapshot(): boolean {
-  return false;
+export function getRoleServerSnapshot(): string {
+  return "customer";
 }
 
-// isAdmin is client-held UX state only (which UI to show) - the backend
-// re-checks the real role from the JWT on every admin write regardless, so
-// nothing security-relevant depends on this flag being accurate.
-export function writeAuth(token: string, user: string, isAdmin = false): void {
+// role is client-held UX state only (which UI to show) - the backend
+// re-checks the real role from the JWT on every admin/lister write
+// regardless, so nothing security-relevant depends on this value being
+// accurate.
+export function isAdminRole(role: string): boolean {
+  return role === "admin";
+}
+export function isListerOrAdminRole(role: string): boolean {
+  return role === "admin" || role === "lister";
+}
+
+export function writeAuth(token: string, user: string, role = "customer"): void {
   if (token && user) {
     localStorage.setItem(AUTH_TOKEN_KEY, token);
     localStorage.setItem(AUTH_USER_KEY, user);
-    localStorage.setItem(AUTH_IS_ADMIN_KEY, String(isAdmin));
+    localStorage.setItem(AUTH_ROLE_KEY, role);
   } else {
     localStorage.removeItem(AUTH_TOKEN_KEY);
     localStorage.removeItem(AUTH_USER_KEY);
-    localStorage.removeItem(AUTH_IS_ADMIN_KEY);
+    localStorage.removeItem(AUTH_ROLE_KEY);
   }
   window.dispatchEvent(new Event(STORAGE_SYNC_EVENT));
 }
