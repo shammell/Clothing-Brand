@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.database import get_database
 from app.models.product import ProductCreate, ProductResponse
-from app.services.auth_service import CurrentUser, require_admin
+from app.services.auth_service import CurrentUser, require_role
 
 
 router = APIRouter(prefix="/products", tags=["Products"])
@@ -54,7 +54,7 @@ async def get_product(product_id: str):
 
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
-async def create_product(product: ProductCreate, _: CurrentUser = Depends(require_admin)):
+async def create_product(product: ProductCreate, _: CurrentUser = Depends(require_role("admin", "lister"))):
     db = get_database()
     result = await db["products"].insert_one(product.model_dump())
     created = await db["products"].find_one({"_id": result.inserted_id})
@@ -67,7 +67,7 @@ async def create_product(product: ProductCreate, _: CurrentUser = Depends(requir
 
 
 @router.put("/{product_id}", response_model=ProductResponse)
-async def update_product(product_id: str, product: ProductCreate, _: CurrentUser = Depends(require_admin)):
+async def update_product(product_id: str, product: ProductCreate, _: CurrentUser = Depends(require_role("admin", "lister"))):
     object_id = parse_product_id(product_id)
     db = get_database()
     result = await db["products"].find_one_and_update(
@@ -89,7 +89,7 @@ async def update_product(product_id: str, product: ProductCreate, _: CurrentUser
 
 
 @router.delete("/{product_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_product(product_id: str, _: CurrentUser = Depends(require_admin)):
+async def delete_product(product_id: str, _: CurrentUser = Depends(require_role("admin", "lister"))):
     object_id = parse_product_id(product_id)
     db = get_database()
     result = await db["products"].delete_one({"_id": object_id})
