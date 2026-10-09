@@ -20,6 +20,7 @@ const CATEGORIES = ["All", "T-Shirts", "Jeans", "Dresses", "Hoodies", "Shoes", "
 export default function ShopPage() {
   const [catalog, setCatalog] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [query, setQuery] = useState("");
   const wishlist = useSyncExternalStore(subscribeToStorage, getWishlistSnapshot, getWishlistServerSnapshot);
@@ -28,10 +29,11 @@ export default function ShopPage() {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
+    setLoadError("");
     fetch(`${API_BASE}/products/`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Products unavailable"))))
       .then((data: Array<Record<string, unknown>>) => setCatalog(data.map(productFromApi)))
-      .catch(() => setCatalog([]))
+      .catch(() => setLoadError("Products unavailable."))
       .finally(() => setLoading(false));
   }, []);
 
@@ -73,19 +75,22 @@ export default function ShopPage() {
       <section className="products-section">
         <div className="section-heading">
           <div><p className="eyebrow">FULL COLLECTION</p><h2>Shop everything</h2></div>
-          <span>{loading ? "Loading..." : `${filteredProducts.length} styles`}</span>
+          <span>{loading ? "Loading..." : loadError ? loadError : `${filteredProducts.length} styles`}</span>
         </div>
-        <div className="product-grid">
-          {filteredProducts.map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              wishlist={wishlist}
-              onToggleWishlist={(id) => toggleWishlist(wishlist, id)}
-              {...addToCartApi}
-            />
-          ))}
-        </div>
+        {!loading && loadError && <p className="detail-status">{loadError}</p>}
+        {!loading && !loadError && (
+          <div className="product-grid">
+            {filteredProducts.map((product) => (
+              <ProductCard
+                key={product.id}
+                product={product}
+                wishlist={wishlist}
+                onToggleWishlist={(id) => toggleWishlist(wishlist, id)}
+                {...addToCartApi}
+              />
+            ))}
+          </div>
+        )}
       </section>
     </main>
   );
