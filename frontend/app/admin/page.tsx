@@ -7,8 +7,9 @@ import {
   getAuthServerSnapshot,
   getAuthTokenSnapshot,
   getCurrentUserSnapshot,
-  getIsAdminServerSnapshot,
-  getIsAdminSnapshot,
+  getRoleServerSnapshot,
+  getRoleSnapshot,
+  isAdminRole,
   subscribeToStorage,
   writeAuth,
 } from "@/lib/auth-store";
@@ -122,7 +123,7 @@ const inputClass = "border border-neutral-300 px-3 py-2 text-sm w-full";
 export default function AdminPage() {
   const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
   const authToken = useSyncExternalStore(subscribeToStorage, getAuthTokenSnapshot, getAuthServerSnapshot);
-  const isAdmin = useSyncExternalStore(subscribeToStorage, getIsAdminSnapshot, getIsAdminServerSnapshot);
+  const role = useSyncExternalStore(subscribeToStorage, getRoleSnapshot, getRoleServerSnapshot);
 
   const [loginEmail, setLoginEmail] = useState("");
   const [loginPassword, setLoginPassword] = useState("");
@@ -214,7 +215,7 @@ export default function AdminPage() {
   };
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!isAdminRole(role)) return;
     // Plain data-fetch effect (load admin data once admin access is
     // confirmed) - the case React's own docs call a valid use of useEffect,
     // not the derived-state anti-pattern this rule targets. No external-store
@@ -225,10 +226,10 @@ export default function AdminPage() {
     // loadProducts/loadOrders are intentionally omitted: they're plain
     // functions recreated every render, not memoized, so including them
     // would re-run this effect (and re-fetch) on every render instead of
-    // only when admin access is first confirmed - isAdmin is the only
+    // only when admin access is first confirmed - role is the only
     // actual trigger this effect cares about.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAdmin]);
+  }, [role]);
 
   const login = async () => {
     setLoginError("");
@@ -244,7 +245,7 @@ export default function AdminPage() {
         setLoginError(extractErrorMessage(data, "Login failed."));
         return;
       }
-      writeAuth(data.access_token, data.user.username, Boolean(data.user.is_admin));
+      writeAuth(data.access_token, data.user.username, data.user.role ?? "customer");
       setLoginPassword("");
     } catch {
       setLoginError("Could not connect to the server.");
@@ -358,7 +359,7 @@ export default function AdminPage() {
     );
   }
 
-  if (!isAdmin) {
+  if (!isAdminRole(role)) {
     return (
       <main className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
         <div className="text-center space-y-4">

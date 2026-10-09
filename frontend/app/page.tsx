@@ -326,7 +326,7 @@ export default function Home() {
         setAuthError(extractErrorMessage(data, "Authentication failed."));
         return;
       }
-      writeAuth(data.access_token, data.user.username, Boolean(data.user.is_admin));
+      writeAuth(data.access_token, data.user.username, data.user.role ?? "customer");
       setAuthOpen(false);
       setAuthPassword("");
     } catch {
