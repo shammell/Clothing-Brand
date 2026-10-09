@@ -21,12 +21,14 @@ export default function CartPage() {
     // Ceiling must distinguish "known stock of exactly 0" from "stock
     // unknown": `line.stock && line.stock > 0` treats 0 as falsy and falls
     // through to the 20 fallback, which would let an out-of-stock line's
-    // quantity climb to 20. Computing the ceiling first (0 when stock is a
-    // known number, 20 only when stock is genuinely unspecified) and then
-    // checking the capped result against <=0 means a 0-stock line always
-    // routes through removeFromCart instead of ever being written with a
-    // quantity of 0.
-    const ceiling = typeof line.stock === "number" ? Math.max(line.stock, 0) : 20;
+    // quantity climb to 20. Computing the ceiling first (capped at 20 same
+    // as the quantity selector in lib/useAddToCart.ts, but only when stock
+    // is a known number - 20 outright when stock is genuinely unspecified)
+    // and then checking the capped result against <=0 means a 0-stock line
+    // always routes through removeFromCart instead of ever being written
+    // with a quantity of 0, while still enforcing the same 20-unit cap as
+    // every other add-to-cart path for stock above 20.
+    const ceiling = typeof line.stock === "number" ? Math.min(line.stock, 20) : 20;
     const nextQuantity = Math.min(line.quantity + delta, ceiling);
     if (nextQuantity <= 0) {
       removeFromCart(index);
