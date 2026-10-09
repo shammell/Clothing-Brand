@@ -203,6 +203,9 @@ footer div { display:flex; gap:20px; }
    sections, consistent with product-detail's existing precedent. */
 .page-shell { padding: 60px 8vw 100px; max-width: 720px; margin: 0 auto; }
 .page-shell h1 { font-size: clamp(30px, 4vw, 44px); margin: 0 0 28px; }
+/* Clears the 82px sticky .navbar so in-page anchor links (e.g. /policies)
+   don't scroll heading targets under it. */
+.page-shell h2[id] { scroll-margin-top: 100px; }
 
 /* Inline loading spinner for submit buttons - replaces "just wait with
    no feedback" on /login, /register, /checkout, /checkout/payment. */
