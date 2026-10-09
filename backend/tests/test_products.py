@@ -106,3 +106,42 @@ def test_admin_can_create_update_and_delete_product(client, admin_headers):
 
     get_response = client.get(f"/products/{product_id}")
     assert get_response.status_code == 404
+
+
+def test_lister_can_create_product(client, lister_headers):
+    response = client.post(
+        "/products/",
+        headers=lister_headers,
+        json={
+            "name": "Lister Tee", "price": 15.0, "category": "T-Shirts", "brand": "TestBrand",
+            "sizes": ["S", "M"], "colors": ["Black"], "image_url": "/products/no-image.svg", "stock": 5,
+        },
+    )
+    assert response.status_code == 201
+
+
+def test_lister_can_update_and_delete_product(client, lister_headers, seed_product):
+    product_id = seed_product()
+    update = client.put(
+        f"/products/{product_id}",
+        headers=lister_headers,
+        json={
+            "name": "Updated Tee", "price": 25.0, "category": "T-Shirts", "brand": "TestBrand",
+            "sizes": ["S"], "colors": ["Black"], "image_url": "/products/no-image.svg", "stock": 3,
+        },
+    )
+    assert update.status_code == 200
+    delete = client.delete(f"/products/{product_id}", headers=lister_headers)
+    assert delete.status_code == 204
+
+
+def test_customer_cannot_create_product(client, auth_headers):
+    response = client.post(
+        "/products/",
+        headers=auth_headers,
+        json={
+            "name": "Customer Tee", "price": 15.0, "category": "T-Shirts", "brand": "TestBrand",
+            "sizes": ["S"], "colors": ["Black"], "image_url": "/products/no-image.svg", "stock": 5,
+        },
+    )
+    assert response.status_code == 403

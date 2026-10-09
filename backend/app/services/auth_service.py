@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, timezone
-from typing import TypedDict
+from typing import Callable, TypedDict
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -51,7 +51,7 @@ def decode_token(token: str) -> dict:
 class CurrentUser(TypedDict):
     user_id: str
     email: str
-    is_admin: bool
+    role: str
 
 
 async def get_current_user(
@@ -86,24 +86,40 @@ async def get_current_user(
             detail="Invalid token payload",
         ) from error
 
-    # is_admin is read from the database on every request, never trusted
-    # from the token claim - an admin demoted (or a user deleted) after
-    # login must lose access immediately, not after the token's 30-minute
-    # expiry.
+    # role and is_blocked are read from the database on every request, never
+    # trusted from the token claim - a block or role change made after login
+    # must take effect immediately, not after the token's 30-minute expiry.
     user = await get_database()["users"].find_one({"_id": object_id})
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="User not found",
         )
+    if user.get("is_blocked"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is blocked",
+        )
 
-    return CurrentUser(user_id=user_id, email=email, is_admin=bool(user.get("is_admin", False)))
+    return CurrentUser(user_id=user_id, email=email, role=str(user.get("role", "customer")))
 
 
 def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
-    if not current_user["is_admin"]:
+    if current_user["role"] != "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Admin access required",
         )
     return current_user
+
+
+def require_role(*roles: str) -> Callable[[CurrentUser], CurrentUser]:
+    def _check(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
+        if current_user["role"] not in roles:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Insufficient permissions",
+            )
+        return current_user
+
+    return _check
