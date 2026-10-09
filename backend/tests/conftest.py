@@ -88,7 +88,7 @@ def make_admin():
         db_client = AsyncIOMotorClient(settings.MONGODB_URL)
         try:
             await db_client[settings.DB_NAME]["users"].update_one(
-                {"email": email.lower()}, {"$set": {"is_admin": True}}
+                {"email": email.lower()}, {"$set": {"role": "admin"}}
             )
         finally:
             db_client.close()
@@ -100,14 +100,38 @@ def make_admin():
 
 
 @pytest.fixture
+def make_lister():
+    async def _update(email: str) -> None:
+        db_client = AsyncIOMotorClient(settings.MONGODB_URL)
+        try:
+            await db_client[settings.DB_NAME]["users"].update_one(
+                {"email": email.lower()}, {"$set": {"role": "lister"}}
+            )
+        finally:
+            db_client.close()
+
+    def _make_lister(email: str) -> None:
+        _run(_update(email))
+
+    return _make_lister
+
+
+@pytest.fixture
 def admin_headers(client: TestClient, register_user, make_admin):
     email = "admin@example.com"
     register_user(username="Admin", email=email, password="adminpass123")
     make_admin(email)
-    # Re-login: the token issued at registration still carries is_admin=False
-    # (it was minted before the account was promoted), matching make_admin.py's
-    # own printed warning that the user must log in again for a fresh token.
     login_response = client.post("/auth/login", json={"email": email, "password": "adminpass123"})
+    token = login_response.json()["access_token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture
+def lister_headers(client: TestClient, register_user, make_lister):
+    email = "lister@example.com"
+    register_user(username="Lister", email=email, password="listerpass1")
+    make_lister(email)
+    login_response = client.post("/auth/login", json={"email": email, "password": "listerpass1"})
     token = login_response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
