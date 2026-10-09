@@ -179,3 +179,32 @@ footer div { display:flex; gap:20px; }
   footer { flex-direction:column; gap:18px; align-items:flex-start; }.chat-window { right:15px; bottom:75px; }.chat-fab { right:15px; }
   .product-detail { grid-template-columns:1fr; padding:30px 24px 70px; gap:30px; }.product-detail-image { min-height:360px; }
 }
+
+/* Micro-interactions (hover/press feedback) - applied via class, not
+   copy-pasted per component. Kept to transform/box-shadow only so it
+   never affects layout (no width/height/margin transitions). */
+.interactive { transition: transform 150ms ease, box-shadow 150ms ease; }
+.interactive:hover { transform: scale(1.02); }
+.interactive:active { transform: scale(0.98); }
+
+/* Scroll-reveal: starts hidden/offset, animates in once useInViewport
+   flips isVisible. Elements above the fold never get this class, so
+   nothing is invisible on first paint. */
+.reveal { opacity: 0; transform: translateY(16px); transition: opacity 400ms ease, transform 400ms ease; }
+.reveal.is-visible { opacity: 1; transform: translateY(0); }
+
+/* One-shot cart icon feedback when an item is added - class is applied
+   briefly then removed by the component, not a permanent state. */
+@keyframes cart-bounce { 0%, 100% { transform: scale(1); } 30% { transform: scale(1.25); } 60% { transform: scale(0.95); } 80% { transform: scale(1.08); } }
+.cart-button.bump b { animation: cart-bounce 420ms ease; }
+
+/* Standalone page layout (login, register, cart, checkout, account,
+   order detail) - narrower and simpler than the homepage's full-width
+   sections, consistent with product-detail's existing precedent. */
+.page-shell { padding: 60px 8vw 100px; max-width: 720px; margin: 0 auto; }
+.page-shell h1 { font-size: clamp(30px, 4vw, 44px); margin: 0 0 28px; }
+
+/* Inline loading spinner for submit buttons - replaces "just wait with
+   no feedback" on /login, /register, /checkout, /checkout/payment. */
+.spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 600ms linear infinite; margin-right: 6px; vertical-align: -1px; }
+@keyframes spin { to { transform: rotate(360deg); } }
