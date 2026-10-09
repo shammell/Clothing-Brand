@@ -1,12 +1,15 @@
 from datetime import datetime, timedelta, timezone
 from typing import TypedDict
 
+from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 import bcrypt
 from app.core.config import settings
+from app.core.database import get_database
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -51,7 +54,7 @@ class CurrentUser(TypedDict):
     is_admin: bool
 
 
-def get_current_user(
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> CurrentUser:
     if credentials is None:
@@ -74,7 +77,27 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
-    return CurrentUser(user_id=user_id, email=email, is_admin=bool(payload.get("is_admin", False)))
+
+    try:
+        object_id = ObjectId(user_id)
+    except InvalidId as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        ) from error
+
+    # is_admin is read from the database on every request, never trusted
+    # from the token claim - an admin demoted (or a user deleted) after
+    # login must lose access immediately, not after the token's 30-minute
+    # expiry.
+    user = await get_database()["users"].find_one({"_id": object_id})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+
+    return CurrentUser(user_id=user_id, email=email, is_admin=bool(user.get("is_admin", False)))
 
 
 def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
