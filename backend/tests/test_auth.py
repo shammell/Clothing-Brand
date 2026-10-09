@@ -63,14 +63,37 @@ def test_email_is_case_insensitive(client, register_user):
     assert response.status_code == 200
 
 
-def test_get_current_user_defaults_missing_role_to_customer(client, register_user):
-    # Simulates a pre-migration JWT that has no "role" claim at all.
-    import jose.jwt as jose_jwt
-    from app.core.config import settings
+def test_get_current_user_defaults_missing_role_to_customer(client):
+    # Simulates a pre-migration user document and JWT, neither of which has
+    # ever heard of "role": the user is inserted directly (register() always
+    # sets role now) and the token carries no role claim either. get_current_user
+    # reads role from the DB document, so this exercises the document's own
+    # .get("role", "customer") fallback, not the token's.
+    import asyncio
 
-    register_user(email="legacy@example.com")
+    import jose.jwt as jose_jwt
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    from app.core.config import settings
+    from app.services.auth_service import hash_password
+
+    async def _insert_legacy_user() -> str:
+        db_client = AsyncIOMotorClient(settings.MONGODB_URL)
+        try:
+            result = await db_client[settings.DB_NAME]["users"].insert_one(
+                {
+                    "name": "Legacy User",
+                    "email": "legacy@example.com",
+                    "password": hash_password("legacypass1"),
+                }
+            )
+            return str(result.inserted_id)
+        finally:
+            db_client.close()
+
+    user_id = asyncio.run(_insert_legacy_user())
     legacy_token = jose_jwt.encode(
-        {"user_id": "000000000000000000000000", "email": "legacy@example.com"},
+        {"user_id": user_id, "email": "legacy@example.com"},
         settings.JWT_SECRET_KEY,
         algorithm=settings.JWT_ALGORITHM,
     )

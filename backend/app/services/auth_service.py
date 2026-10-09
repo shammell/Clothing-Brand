@@ -1,12 +1,15 @@
 from datetime import datetime, timedelta, timezone
 from typing import Callable, TypedDict
 
+from bson import ObjectId
+from bson.errors import InvalidId
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError, jwt
 
 import bcrypt
 from app.core.config import settings
+from app.core.database import get_database
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -51,7 +54,7 @@ class CurrentUser(TypedDict):
     role: str
 
 
-def get_current_user(
+async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(bearer_scheme),
 ) -> CurrentUser:
     if credentials is None:
@@ -74,10 +77,31 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
-    # Tokens issued before the role migration carry no "role" claim at all -
-    # default to the least-privileged role rather than raising, so a
-    # pre-existing session degrades gracefully to customer-level access.
-    return CurrentUser(user_id=user_id, email=email, role=str(payload.get("role", "customer")))
+
+    try:
+        object_id = ObjectId(user_id)
+    except InvalidId as error:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        ) from error
+
+    # role and is_blocked are read from the database on every request, never
+    # trusted from the token claim - a block or role change made after login
+    # must take effect immediately, not after the token's 30-minute expiry.
+    user = await get_database()["users"].find_one({"_id": object_id})
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="User not found",
+        )
+    if user.get("is_blocked"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Account is blocked",
+        )
+
+    return CurrentUser(user_id=user_id, email=email, role=str(user.get("role", "customer")))
 
 
 def require_admin(current_user: CurrentUser = Depends(get_current_user)) -> CurrentUser:
