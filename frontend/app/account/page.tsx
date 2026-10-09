@@ -25,6 +25,10 @@ export default function AccountPage() {
   // this time, since this branch (unlike /orders/[id]'s) actually navigates.
   const [readyToRedirect, setReadyToRedirect] = useState(false);
   useEffect(() => {
+    // One-time "past first client paint" signal, not the derived-state
+    // anti-pattern this rule targets - same justification as the existing
+    // disable in app/admin/page.tsx.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setReadyToRedirect(true);
   }, []);
 

@@ -43,6 +43,10 @@ export default function CheckoutPage() {
   // longer the hydration snapshot) by the time this effect is allowed to act.
   const [readyToRedirect, setReadyToRedirect] = useState(false);
   useEffect(() => {
+    // One-time "past first client paint" signal, not the derived-state
+    // anti-pattern this rule targets - same justification as the existing
+    // disable in app/admin/page.tsx.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setReadyToRedirect(true);
   }, []);
 

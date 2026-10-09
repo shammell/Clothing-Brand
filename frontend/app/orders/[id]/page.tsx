@@ -46,6 +46,10 @@ export default function OrderDetailPage() {
   // only ever fires on a real, settled authToken.
   const [clientReady, setClientReady] = useState(false);
   useEffect(() => {
+    // One-time "past first client paint" signal, not the derived-state
+    // anti-pattern this rule targets - same justification as the existing
+    // disable in app/admin/page.tsx.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setClientReady(true);
   }, []);
 

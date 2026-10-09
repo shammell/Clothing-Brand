@@ -143,6 +143,10 @@ export default function Home() {
   // recording the true baseline instead of comparing against a placeholder.
   const [hasHydrated, setHasHydrated] = useState(false);
   useEffect(() => {
+    // One-time "past first client paint" signal, not the derived-state
+    // anti-pattern this rule targets - same justification as the existing
+    // disable in app/admin/page.tsx.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setHasHydrated(true);
   }, []);
   const previousCartCountRef = useRef<number | null>(null);
@@ -158,8 +162,14 @@ export default function Home() {
     previousCartCountRef.current = cartCount;
   }, [hasHydrated, cartCount]);
 
-  const newBanner = useInViewport<HTMLDivElement>();
-  const aboutBanner = useInViewport<HTMLDivElement>();
+  // Destructured immediately rather than kept as `newBanner.ref`/
+  // `newBanner.isVisible`: the React Compiler's ESLint rule can't verify
+  // property access on an object returned from a custom hook is safe
+  // during render (it flags the whole object once it sees a ref inside
+  // it, isVisible included), but a directly-destructured binding is a
+  // pattern it recognizes as safe.
+  const { ref: newBannerRef, isVisible: newBannerVisible } = useInViewport<HTMLDivElement>();
+  const { ref: aboutBannerRef, isVisible: aboutBannerVisible } = useInViewport<HTMLDivElement>();
 
   useEffect(() => {
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory.slice(-20)));
@@ -300,12 +310,12 @@ export default function Home() {
         </div>
       </section>
 
-      <section ref={newBanner.ref} className={`story-banner reveal${newBanner.isVisible ? " is-visible" : ""}`} id="new">
+      <section ref={newBannerRef} className={`story-banner reveal${newBannerVisible ? " is-visible" : ""}`} id="new">
         <div><p className="eyebrow">NEW THIS SEASON</p><h2>Made for<br /><em>every day.</em></h2></div>
         <p>Explore versatile essentials designed to move with you, from easy layers to pieces that make an entrance.</p>
       </section>
 
-      <section ref={aboutBanner.ref} className={`story-banner reveal${aboutBanner.isVisible ? " is-visible" : ""}`} id="about">
+      <section ref={aboutBannerRef} className={`story-banner reveal${aboutBannerVisible ? " is-visible" : ""}`} id="about">
         <div><p className="eyebrow">MADE FOR REAL LIFE</p><h2>Less trend.<br /><em>More you.</em></h2></div>
         <p>We believe getting dressed should feel effortless. That&apos;s why we create versatile pieces with considered details, honest materials, and a little room for your personality.</p>
       </section>
