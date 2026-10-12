@@ -1,3 +1,5 @@
+import html as html_lib
+
 from fastapi import APIRouter, BackgroundTasks, Request, status
 
 from app.core.limiter import limiter
@@ -11,6 +13,14 @@ router = APIRouter(prefix="/contact", tags=["Contact"])
 SUPPORT_INBOX = "onboarding@resend.dev"
 
 
+def sanitize_subject(value: str) -> str:
+    # Strips CR/LF before the string ever reaches an email subject - even
+    # though Resend's API is JSON, not raw SMTP, defense-in-depth against
+    # header injection is cheap enough not to rely solely on the downstream
+    # provider never treating a raw string as header text.
+    return value.replace("\r", "").replace("\n", "")
+
+
 @router.post("/", status_code=status.HTTP_202_ACCEPTED)
 @limiter.limit("5/minute")
 async def submit_contact_message(request: Request, message: ContactMessage, background_tasks: BackgroundTasks):
@@ -19,7 +29,10 @@ async def submit_contact_message(request: Request, message: ContactMessage, back
     background_tasks.add_task(
         send_email,
         to=SUPPORT_INBOX,
-        subject=f"Contact form: {message.name}",
-        html=f"<p>From: {message.name} ({message.email})</p><p>{message.message}</p>",
+        subject=f"Contact form: {sanitize_subject(message.name)}",
+        html=(
+            f"<p>From: {html_lib.escape(message.name)} ({html_lib.escape(str(message.email))})</p>"
+            f"<p>{html_lib.escape(message.message)}</p>"
+        ),
     )
     return {"status": "received"}
