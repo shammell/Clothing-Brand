@@ -29,6 +29,13 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 
 RESET_TOKEN_EXPIRE_MINUTES = 15
+# Per-IP limiting on the /forgot-password route (see core/limiter.py) guards
+# cost/abuse, but IP is the wrong principal for "how often can THIS account
+# be emailed" - an attacker spreading requests across many IPs could
+# otherwise email-bomb one victim's inbox without limit. This cooldown is
+# keyed on the account itself (via a DB field, not per-process memory) so it
+# holds regardless of how many distinct IPs the requests come from.
+PASSWORD_RESET_COOLDOWN_SECONDS = 60
 
 
 def password_fingerprint(password_hash: str) -> str:
@@ -55,6 +62,7 @@ def create_reset_token(user_id: str, email: str, current_password_hash: str) -> 
 
 def create_access_token(data: dict) -> str:
     payload = data.copy()
+    payload.setdefault("purpose", "access")
     expires_at = datetime.now(timezone.utc) + timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
@@ -99,6 +107,18 @@ async def get_current_user(
     user_id = payload.get("user_id")
     email = payload.get("email")
     if not user_id or not email:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid token payload",
+        )
+    # A password-reset token is a JWT signed with this same secret and also
+    # carries user_id/email, so without this check it would work as a
+    # bearer access token too - anyone who received a reset email (or
+    # intercepted the link) could call any protected route for the
+    # token's 15-minute lifetime without ever resetting a password. Legacy
+    # tokens with no "purpose" claim at all (pre-dating this field) are
+    # still accepted as access tokens.
+    if payload.get("purpose") not in (None, "access"):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",

@@ -303,3 +303,42 @@ def test_reset_password_rejects_login_token_as_reset_token(client, auth_headers)
 def test_reset_password_rejects_garbage_token(client):
     response = client.post("/auth/reset-password", json={"token": "not-a-real-token", "new_password": "newpass456"})
     assert response.status_code == 400
+
+
+def test_reset_token_cannot_be_used_as_bearer_access_token(client, register_user, monkeypatch):
+    # A password reset token is a JWT signed with the same secret as an
+    # access token and carries user_id/email too - get_current_user must
+    # not accept it just because those claims are present, or anyone who
+    # receives a reset email (or intercepts the link) gets a working bearer
+    # token for every protected route for the token's 15-minute lifetime,
+    # without ever resetting anything.
+    register_user(email="resettokenauth@example.com", password="origpass123")
+    captured = {}
+    monkeypatch.setattr(
+        "app.routes.auth.send_email",
+        lambda to, subject, html: captured.setdefault("html", html) or True,
+    )
+    client.post("/auth/forgot-password", json={"email": "resettokenauth@example.com"})
+    reset_token = captured["html"].split("token=")[1].split('"')[0]
+
+    response = client.get("/orders/me", headers={"Authorization": f"Bearer {reset_token}"})
+    assert response.status_code == 401
+
+
+def test_forgot_password_does_not_resend_within_cooldown(client, register_user, monkeypatch):
+    # Rate limiting on this route is keyed by IP (abuse/cost control), but an
+    # attacker spreading requests across many IPs could otherwise email-bomb
+    # one victim's inbox without limit, since IP is the wrong principal for
+    # "how often can THIS account be emailed". A per-account cooldown closes
+    # that regardless of how many distinct IPs the requests come from.
+    register_user(email="cooldown@example.com", password="origpass123")
+    sent = []
+    monkeypatch.setattr(
+        "app.routes.auth.send_email",
+        lambda to, subject, html: sent.append((to, subject, html)) or True,
+    )
+    first = client.post("/auth/forgot-password", json={"email": "cooldown@example.com"})
+    second = client.post("/auth/forgot-password", json={"email": "cooldown@example.com"})
+    assert first.status_code == 202
+    assert second.status_code == 202
+    assert len(sent) == 1

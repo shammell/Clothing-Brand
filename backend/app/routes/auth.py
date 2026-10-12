@@ -17,6 +17,7 @@ from app.models.user import (
     UserResponse,
 )
 from app.services.auth_service import (
+    PASSWORD_RESET_COOLDOWN_SECONDS,
     CurrentUser,
     create_access_token,
     create_reset_token,
@@ -114,6 +115,16 @@ async def forgot_password(request: Request, body: PasswordResetRequest, backgrou
     # response here would let anyone enumerate registered emails by
     # watching which ones trigger a 404 vs 202.
     if user:
+        now = datetime.now(timezone.utc)
+        last_request = user.get("last_password_reset_request_at")
+        # Motor/PyMongo round-trips BSON datetimes as naive UTC regardless of
+        # what was stored - reattach the UTC tzinfo before subtracting, or
+        # this raises on every account that has ever requested a reset.
+        if last_request and last_request.tzinfo is None:
+            last_request = last_request.replace(tzinfo=timezone.utc)
+        if last_request and (now - last_request).total_seconds() < PASSWORD_RESET_COOLDOWN_SECONDS:
+            return {"status": "if that email exists, a reset link was sent"}
+        await db["users"].update_one({"_id": user["_id"]}, {"$set": {"last_password_reset_request_at": now}})
         token = create_reset_token(str(user["_id"]), email, user.get("password", ""))
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
         background_tasks.add_task(
