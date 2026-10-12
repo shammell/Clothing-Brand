@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { ContactForm } from "@/components/ContactForm";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
   title: "Contact us — Thread&Co",
@@ -24,6 +25,7 @@ export default function ContactPage() {
         </p>
         <ContactForm />
       </section>
+      <SiteFooter />
     </main>
   );
 }

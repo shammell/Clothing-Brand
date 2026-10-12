@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
   title: "Policies — Thread&Co",
@@ -50,6 +51,7 @@ export default function PoliciesPage() {
           start a return.
         </p>
       </section>
+      <SiteFooter />
     </main>
   );
 }

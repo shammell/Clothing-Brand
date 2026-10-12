@@ -18,6 +18,7 @@ import {
 } from "@/lib/shop-store";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { ProductCard } from "@/components/ProductCard";
+import { SiteFooter } from "@/components/SiteFooter";
 import { useInViewport } from "@/lib/useInViewport";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
@@ -279,7 +280,7 @@ export default function Home() {
         <p>We believe getting dressed should feel effortless. That&apos;s why we create versatile pieces with considered details, honest materials, and a little room for your personality.</p>
       </section>
 
-      <footer id="contact"><a className="brand" href="#">THREAD<span>&</span>CO</a><p>© 2026 Thread&Co. Designed for every day.</p><div><a href="#shop">Shop</a><a href="#about">About</a><a href="mailto:hello@threadco.example">Contact</a></div></footer>
+      <SiteFooter hasChatFab />
 
       <button className="chat-fab" onClick={() => setChatOpen(!chatOpen)} aria-label="Open style assistant">✦ <span>Style assistant</span></button>
       {chatOpen && <div className="chat-window"><div className="chat-header"><span><b>✦</b> Thread&Co assistant</span><button onClick={() => setChatOpen(false)}>×</button></div><div className="chat-body"><div className="chat-messages">{chatHistory.map((message, index) => <div className={message.role === "user" ? "user-message" : "bot-message"} key={`${message.role}-${index}`}>{message.content}</div>)}{chatLoading && <div className="bot-message">Finding the best style for you...</div>}</div><div className="chat-suggestions"><button onClick={() => setChatInput("Help me find an outfit")}>Help me find an outfit</button><button onClick={() => setChatInput("What's new?")}>What&apos;s new?</button></div></div><div className="chat-input"><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && sendChat()} placeholder="Ask me anything..." /><button onClick={sendChat}>↑</button></div></div>}

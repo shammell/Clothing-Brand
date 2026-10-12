@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ProductCard } from "@/components/ProductCard";
+import { SiteFooter } from "@/components/SiteFooter";
 import { subscribeToStorage } from "@/lib/auth-store";
 import {
   type Product,
@@ -92,6 +93,7 @@ export default function ShopPage() {
           </div>
         )}
       </section>
+      <SiteFooter />
     </main>
   );
 }

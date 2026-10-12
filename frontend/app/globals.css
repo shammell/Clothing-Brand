@@ -106,6 +106,12 @@ h1 em,h2 em { color:var(--accent); font-style:italic; }
 .story-banner h2 { font-size:57px; }
 .story-banner > p { align-self:end; color:#b7b0a7; font-size:14px; line-height:1.8; max-width:370px; }
 footer { display:flex; justify-content:space-between; align-items:center; padding:30px 8vw; background:#f0ebe4; }
+/* Extra right-hand clearance so the fixed chat-fab (bottom-right, same
+   corner, only present on the homepage) never sits on top of the
+   footer's link row - without this the fab visually covers/blocks
+   whichever link lands closest to it. Scoped to .has-chat-fab rather
+   than all footers, since only the page with the fab needs the gutter. */
+footer.has-chat-fab { padding-right:calc(8vw + 190px); }
 footer p { font-size:10px; color:var(--muted); }
 footer div { display:flex; gap:20px; }
 .chat-fab { position:fixed; z-index:5; right:25px; bottom:24px; border:0; border-radius:28px; background:var(--accent); color:white; padding:13px 18px; box-shadow:0 8px 24px #51322644; font-size:12px; }
@@ -177,6 +183,11 @@ footer div { display:flex; gap:20px; }
   .products-section { padding:55px 24px 70px; }.product-grid { grid-template-columns:repeat(2,1fr); gap:25px 10px; }.product-image { height:270px; }
   .product-info h3 { font-size:14px; }.story-banner { grid-template-columns:1fr; padding:65px 24px; gap:35px; }.story-banner h2 { font-size:48px; }
   footer { flex-direction:column; gap:18px; align-items:flex-start; }.chat-window { right:15px; bottom:75px; }.chat-fab { right:15px; }
+  /* Stacked layout puts the link row at the very bottom of the page,
+     same spot the fixed fab floats - the desktop fix (right padding)
+     doesn't apply here since nothing is side-by-side anymore, so this
+     needs its own bottom clearance instead. */
+  footer.has-chat-fab { padding-right:8vw; padding-bottom:90px; }
   .product-detail { grid-template-columns:1fr; padding:30px 24px 70px; gap:30px; }.product-detail-image { min-height:360px; }
 }
 

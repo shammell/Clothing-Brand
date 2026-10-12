@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { SiteFooter } from "@/components/SiteFooter";
 
 export const metadata: Metadata = {
   title: "About us — Thread&Co",
@@ -36,6 +37,7 @@ export default function AboutPage() {
           make it. See our <Link href="/policies" style={{ color: "var(--accent)" }}>policies</Link> for details.
         </p>
       </section>
+      <SiteFooter />
     </main>
   );
 }

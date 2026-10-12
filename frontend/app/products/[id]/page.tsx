@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { subscribeToStorage } from "@/lib/auth-store";
+import { SiteFooter } from "@/components/SiteFooter";
 import {
   FALLBACK_IMAGE,
   type Product,
@@ -129,6 +130,7 @@ export default function ProductDetailPage() {
           </div>
         </section>
       )}
+      <SiteFooter />
     </main>
   );
 }
