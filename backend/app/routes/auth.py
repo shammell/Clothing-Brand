@@ -1,17 +1,32 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from bson import ObjectId
+from bson.errors import InvalidId
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
+from jose import JWTError
 
+from app.core.config import settings
 from app.core.database import get_database
 from app.core.limiter import limiter
-from app.models.user import UserRegister, UserLogin, TokenResponse, UserResponse
+from app.models.user import (
+    PasswordResetConfirm,
+    PasswordResetRequest,
+    UserRegister,
+    UserLogin,
+    TokenResponse,
+    UserResponse,
+)
 from app.services.auth_service import (
     CurrentUser,
     create_access_token,
+    create_reset_token,
+    decode_token,
     get_current_user,
     hash_password,
+    password_fingerprint,
     verify_password,
 )
+from app.services.email_service import send_email
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -87,3 +102,64 @@ async def login(request: Request, user: UserLogin):
 @router.get("/me")
 async def get_me(current_user: CurrentUser = Depends(get_current_user)):
     return {"user_id": current_user["user_id"], "email": current_user["email"], "role": current_user["role"]}
+
+
+@router.post("/forgot-password", status_code=status.HTTP_202_ACCEPTED)
+@limiter.limit("5/minute")
+async def forgot_password(request: Request, body: PasswordResetRequest, background_tasks: BackgroundTasks):
+    db = get_database()
+    email = str(body.email).lower()
+    user = await db["users"].find_one({"email": email})
+    # Always 202 regardless of whether the account exists - a different
+    # response here would let anyone enumerate registered emails by
+    # watching which ones trigger a 404 vs 202.
+    if user:
+        token = create_reset_token(str(user["_id"]), email, user.get("password", ""))
+        reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
+        background_tasks.add_task(
+            send_email,
+            to=email,
+            subject="Reset your Thread&Co password",
+            html=f'<p>Click to reset your password (expires in 15 minutes): <a href="{reset_link}">{reset_link}</a></p>',
+        )
+    return {"status": "if that email exists, a reset link was sent"}
+
+
+@router.post("/reset-password")
+@limiter.limit("10/minute")
+async def reset_password(request: Request, body: PasswordResetConfirm):
+    try:
+        payload = decode_token(body.token)
+    except JWTError as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link"
+        ) from error
+    if payload.get("purpose") != "password_reset":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link")
+
+    db = get_database()
+    try:
+        object_id = ObjectId(payload["user_id"])
+    except InvalidId as error:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link"
+        ) from error
+
+    user = await db["users"].find_one({"_id": object_id})
+    if not user or password_fingerprint(user.get("password", "")) != payload.get("pwd_fp"):
+        # Either the user is gone, or the password has already changed
+        # since this token was issued (a previous use of this same token,
+        # or a change made some other way) - the token is single-use by
+        # construction, not by a separate used-token store.
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link")
+
+    # Conditioned on the password still matching what was just checked -
+    # closes the race between two concurrent requests replaying the same
+    # still-valid token before either has committed its update.
+    result = await db["users"].update_one(
+        {"_id": object_id, "password": user["password"]},
+        {"$set": {"password": hash_password(body.new_password)}},
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired reset link")
+    return {"status": "password updated"}

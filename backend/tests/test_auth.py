@@ -227,3 +227,79 @@ def test_demoting_admin_revokes_admin_access_for_their_existing_token(
 
     response = client.get("/users/", headers=first_admin_headers)
     assert response.status_code == 403
+
+
+def test_forgot_password_sends_email_for_existing_user(client, register_user, monkeypatch):
+    register_user(email="reset@example.com", password="origpass123")
+    sent = []
+    monkeypatch.setattr(
+        "app.routes.auth.send_email",
+        lambda to, subject, html: sent.append((to, subject, html)) or True,
+    )
+    response = client.post("/auth/forgot-password", json={"email": "reset@example.com"})
+    assert response.status_code == 202
+    assert len(sent) == 1
+    assert sent[0][0] == "reset@example.com"
+
+
+def test_forgot_password_returns_202_for_unknown_email_without_sending(client, monkeypatch):
+    sent = []
+    monkeypatch.setattr(
+        "app.routes.auth.send_email",
+        lambda to, subject, html: sent.append((to, subject, html)) or True,
+    )
+    response = client.post("/auth/forgot-password", json={"email": "nobody@example.com"})
+    assert response.status_code == 202
+    assert len(sent) == 0
+
+
+def test_reset_password_changes_password(client, register_user, monkeypatch):
+    register_user(email="reset2@example.com", password="origpass123")
+    captured = {}
+    monkeypatch.setattr(
+        "app.routes.auth.send_email",
+        lambda to, subject, html: captured.setdefault("html", html) or True,
+    )
+    client.post("/auth/forgot-password", json={"email": "reset2@example.com"})
+    token = captured["html"].split("token=")[1].split('"')[0]
+
+    response = client.post("/auth/reset-password", json={"token": token, "new_password": "newpass456"})
+    assert response.status_code == 200
+
+    login = client.post("/auth/login", json={"email": "reset2@example.com", "password": "newpass456"})
+    assert login.status_code == 200
+    old_login = client.post("/auth/login", json={"email": "reset2@example.com", "password": "origpass123"})
+    assert old_login.status_code == 401
+
+
+def test_reset_password_token_is_single_use(client, register_user, monkeypatch):
+    register_user(email="reset3@example.com", password="origpass123")
+    captured = {}
+    monkeypatch.setattr(
+        "app.routes.auth.send_email",
+        lambda to, subject, html: captured.setdefault("html", html) or True,
+    )
+    client.post("/auth/forgot-password", json={"email": "reset3@example.com"})
+    token = captured["html"].split("token=")[1].split('"')[0]
+
+    first = client.post("/auth/reset-password", json={"token": token, "new_password": "newpass456"})
+    assert first.status_code == 200
+
+    # Same token replayed after the password it was fingerprinted against
+    # has already changed - must be rejected, not silently reset again.
+    second = client.post("/auth/reset-password", json={"token": token, "new_password": "anotherpass789"})
+    assert second.status_code == 400
+
+    login = client.post("/auth/login", json={"email": "reset3@example.com", "password": "newpass456"})
+    assert login.status_code == 200
+
+
+def test_reset_password_rejects_login_token_as_reset_token(client, auth_headers):
+    token = auth_headers["Authorization"].split(" ")[1]
+    response = client.post("/auth/reset-password", json={"token": token, "new_password": "newpass456"})
+    assert response.status_code == 400
+
+
+def test_reset_password_rejects_garbage_token(client):
+    response = client.post("/auth/reset-password", json={"token": "not-a-real-token", "new_password": "newpass456"})
+    assert response.status_code == 400

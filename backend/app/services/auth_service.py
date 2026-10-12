@@ -1,3 +1,4 @@
+import hashlib
 from datetime import datetime, timedelta, timezone
 from typing import Callable, TypedDict
 
@@ -25,6 +26,31 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         plain_password.encode("utf-8"),
         hashed_password.encode("utf-8"),
     )
+
+
+RESET_TOKEN_EXPIRE_MINUTES = 15
+
+
+def password_fingerprint(password_hash: str) -> str:
+    # A short digest of the current bcrypt hash, not the hash itself - the
+    # hash is already one-way, but there's no reason to also put it
+    # verbatim into a bearer token that travels over email. Embedding this
+    # in the reset token and re-checking it at reset time is what makes the
+    # token single-use: resetting the password changes the hash, so a
+    # replayed copy of the same token no longer matches and is rejected,
+    # without needing a separate used-token store.
+    return hashlib.sha256(password_hash.encode("utf-8")).hexdigest()[:16]
+
+
+def create_reset_token(user_id: str, email: str, current_password_hash: str) -> str:
+    payload = {
+        "user_id": user_id,
+        "email": email,
+        "purpose": "password_reset",
+        "pwd_fp": password_fingerprint(current_password_hash),
+        "exp": datetime.now(timezone.utc) + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
 def create_access_token(data: dict) -> str:
