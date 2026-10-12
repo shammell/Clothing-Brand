@@ -57,6 +57,10 @@ class Settings(BaseSettings):
     # since trusting a hop you don't control lets any client forge their
     # apparent identity and bypass per-IP limiting entirely.
     TRUSTED_PROXY_HOPS: int = 0
+    # Comma-separated extra origins (e.g. the production domain) merged
+    # with DEFAULT_DEV_ORIGINS below - empty/unset must never shrink the
+    # allow-list below today's dev-only defaults.
+    ALLOWED_ORIGINS: str = ""
 
     class Config:
         env_file = ".env"
@@ -76,6 +80,23 @@ class Settings(BaseSettings):
                 'python -c "import secrets; print(secrets.token_urlsafe(32))"'
             )
         return value
+
+
+DEFAULT_DEV_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+    # `npm run dev` defaults to 3000, not 3001 - keeping both so LAN
+    # access works whichever port the frontend actually comes up on.
+    "http://192.168.18.38:3000",
+    "http://192.168.18.38:3001",
+]
+
+
+def build_allowed_origins(extra: str) -> list[str]:
+    extras = [origin.strip() for origin in extra.split(",") if origin.strip()]
+    return DEFAULT_DEV_ORIGINS + extras
 
 
 settings = Settings()
