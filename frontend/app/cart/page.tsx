@@ -63,7 +63,7 @@ export default function CartPage() {
         <>
           {cart.map((item, index) => (
             <div className="cart-item" key={`${item.id}-${item.size}-${item.color}-${index}`}>
-              <img src={item.image} alt="" onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = FALLBACK_IMAGE; }} />
+              <img src={item.image} alt={item.name} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = FALLBACK_IMAGE; }} />
               <div>
                 <b>{item.name}</b>
                 <small>{item.category} · {item.size}{item.color ? ` · ${item.color}` : ""}</small>
