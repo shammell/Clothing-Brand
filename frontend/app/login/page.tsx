@@ -41,6 +41,7 @@ function LoginPageContent() {
       >
         <input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="Email address" />
         <input type="password" required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Password" />
+        <Link href="/forgot-password" className="auth-switch">Forgot password?</Link>
         {error && <p className="auth-error">{error}</p>}
         <button className="auth-submit interactive" type="submit" disabled={loading}>
           {loading && <span className="spinner" />}
