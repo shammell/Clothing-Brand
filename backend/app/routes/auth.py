@@ -1,11 +1,17 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.database import get_database
 from app.core.limiter import limiter
 from app.models.user import UserRegister, UserLogin, TokenResponse, UserResponse
-from app.services.auth_service import hash_password, verify_password, create_access_token
+from app.services.auth_service import (
+    CurrentUser,
+    create_access_token,
+    get_current_user,
+    hash_password,
+    verify_password,
+)
 
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
@@ -76,3 +82,8 @@ async def login(request: Request, user: UserLogin):
             role=role,
         ),
     )
+
+
+@router.get("/me")
+async def get_me(current_user: CurrentUser = Depends(get_current_user)):
+    return {"user_id": current_user["user_id"], "email": current_user["email"], "role": current_user["role"]}

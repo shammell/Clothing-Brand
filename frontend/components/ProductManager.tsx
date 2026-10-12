@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type FormEvent } from "react";
+import { upload } from "@vercel/blob/client";
 import { authenticatedFetch, extractErrorMessage } from "@/lib/auth-store";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
@@ -64,6 +65,25 @@ export function ProductManager({ authToken, onSessionExpired }: { authToken: str
   const [formError, setFormError] = useState("");
   const [formSaving, setFormSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState("");
+
+  const uploadImage = async (file: File) => {
+    setUploading(true);
+    setUploadError("");
+    try {
+      const blob = await upload(file.name, file, {
+        access: "public",
+        handleUploadUrl: "/api/upload",
+        clientPayload: authToken,
+      });
+      setForm((current) => ({ ...current, image_url: blob.url }));
+    } catch {
+      setUploadError("Could not upload image.");
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const loadProducts = async () => {
     setProductsLoading(true);
@@ -171,7 +191,21 @@ export function ProductManager({ authToken, onSessionExpired }: { authToken: str
           <input type="number" step="0.1" min="0" max="5" placeholder="Rating (0-5)" value={form.rating} onChange={(event) => setForm({ ...form, rating: event.target.value })} className={inputClass} />
           <input required placeholder="Sizes (comma-separated)" value={form.sizes} onChange={(event) => setForm({ ...form, sizes: event.target.value })} className={`${inputClass} md:col-span-2`} />
           <input required placeholder="Colors (comma-separated)" value={form.colors} onChange={(event) => setForm({ ...form, colors: event.target.value })} className={`${inputClass} md:col-span-2`} />
-          <input required placeholder="Image URL (e.g. /products/x.jpg)" value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} className={`${inputClass} md:col-span-2`} />
+          <input required placeholder="Image URL (or upload below)" value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} className={`${inputClass} md:col-span-2`} />
+          <div className="md:col-span-2 flex items-center gap-3">
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp,image/avif"
+              disabled={uploading}
+              onChange={(event) => {
+                const file = event.target.files?.[0];
+                if (file) uploadImage(file);
+                event.target.value = "";
+              }}
+            />
+            {uploading && <span className="text-sm text-neutral-500">Uploading...</span>}
+            {uploadError && <span className="text-sm text-red-600">{uploadError}</span>}
+          </div>
           <textarea placeholder="Description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className={`${inputClass} md:col-span-2`} rows={2} />
           {formError && <p className="text-sm text-red-600 md:col-span-2">{formError}</p>}
           <div className="flex gap-3 md:col-span-2">
