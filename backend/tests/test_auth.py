@@ -325,6 +325,34 @@ def test_reset_token_cannot_be_used_as_bearer_access_token(client, register_user
     assert response.status_code == 401
 
 
+def test_forgot_password_cooldown_is_atomic_under_concurrent_requests(client, register_user, monkeypatch):
+    # The cooldown must be a single atomic claim (check-and-set in one DB
+    # operation), not a separate read-then-write - two requests racing
+    # between the read and the write would otherwise both pass the check
+    # and both send an email, defeating the whole point of the cooldown
+    # for the exact concurrent-flood scenario it exists to stop.
+    from concurrent.futures import ThreadPoolExecutor
+
+    register_user(email="race@example.com", password="origpass123")
+    sent = []
+    monkeypatch.setattr(
+        "app.routes.auth.send_email",
+        lambda to, subject, html: sent.append((to, subject, html)) or True,
+    )
+
+    def _call():
+        return client.post("/auth/forgot-password", json={"email": "race@example.com"})
+
+    # Stays within the route's own 5/minute per-IP rate limit (a separate,
+    # already-tested concern) so this exercises only the cooldown's
+    # atomicity, not that limiter.
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        responses = list(pool.map(lambda _: _call(), range(5)))
+
+    assert all(response.status_code == 202 for response in responses)
+    assert len(sent) == 1
+
+
 def test_forgot_password_does_not_resend_within_cooldown(client, register_user, monkeypatch):
     # Rate limiting on this route is keyed by IP (abuse/cost control), but an
     # attacker spreading requests across many IPs could otherwise email-bomb

@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from bson import ObjectId
 from bson.errors import InvalidId
@@ -116,15 +116,28 @@ async def forgot_password(request: Request, body: PasswordResetRequest, backgrou
     # watching which ones trigger a 404 vs 202.
     if user:
         now = datetime.now(timezone.utc)
-        last_request = user.get("last_password_reset_request_at")
-        # Motor/PyMongo round-trips BSON datetimes as naive UTC regardless of
-        # what was stored - reattach the UTC tzinfo before subtracting, or
-        # this raises on every account that has ever requested a reset.
-        if last_request and last_request.tzinfo is None:
-            last_request = last_request.replace(tzinfo=timezone.utc)
-        if last_request and (now - last_request).total_seconds() < PASSWORD_RESET_COOLDOWN_SECONDS:
+        cutoff = now - timedelta(seconds=PASSWORD_RESET_COOLDOWN_SECONDS)
+        # Claiming the cooldown is one atomic update, not a read-then-write -
+        # a separate find_one check followed by a later update_one leaves a
+        # gap where concurrent requests can all read "no recent request" and
+        # all send an email before any of them writes, defeating the
+        # cooldown for exactly the concurrent-flood case it exists to stop.
+        # MongoDB applies a single document's update atomically, so of any
+        # number of requests racing this filter, only one can match and set
+        # last_password_reset_request_at first; every other racer's filter
+        # then fails against the value that one just wrote.
+        claim = await db["users"].update_one(
+            {
+                "_id": user["_id"],
+                "$or": [
+                    {"last_password_reset_request_at": {"$exists": False}},
+                    {"last_password_reset_request_at": {"$lt": cutoff}},
+                ],
+            },
+            {"$set": {"last_password_reset_request_at": now}},
+        )
+        if claim.matched_count == 0:
             return {"status": "if that email exists, a reset link was sent"}
-        await db["users"].update_one({"_id": user["_id"]}, {"$set": {"last_password_reset_request_at": now}})
         token = create_reset_token(str(user["_id"]), email, user.get("password", ""))
         reset_link = f"{settings.FRONTEND_URL}/reset-password?token={token}"
         background_tasks.add_task(
