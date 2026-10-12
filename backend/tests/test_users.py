@@ -86,3 +86,39 @@ def test_admin_cannot_block_self_with_uppercase_id(client, admin_headers):
         f"/users/{self_id.upper()}/block", headers=admin_headers, json={"is_blocked": True}
     )
     assert response.status_code == 400
+
+
+def test_role_change_is_recorded_in_audit_log(client, admin_headers, register_user):
+    register_user(email="target@example.com")
+    users_response = client.get("/users/", headers=admin_headers)
+    target_id = next(u["id"] for u in users_response.json() if u["email"] == "target@example.com")
+
+    client.patch(f"/users/{target_id}/role", headers=admin_headers, json={"role": "lister"})
+
+    log_response = client.get("/users/audit-log", headers=admin_headers)
+    assert log_response.status_code == 200
+    entries = log_response.json()
+    assert any(
+        e["target_user_id"] == target_id and e["action"] == "role_change" and e["details"]["new_role"] == "lister"
+        for e in entries
+    )
+
+
+def test_block_change_is_recorded_in_audit_log(client, admin_headers, register_user):
+    register_user(email="target2@example.com")
+    users_response = client.get("/users/", headers=admin_headers)
+    target_id = next(u["id"] for u in users_response.json() if u["email"] == "target2@example.com")
+
+    client.patch(f"/users/{target_id}/block", headers=admin_headers, json={"is_blocked": True})
+
+    log_response = client.get("/users/audit-log", headers=admin_headers)
+    entries = log_response.json()
+    assert any(
+        e["target_user_id"] == target_id and e["action"] == "block_change" and e["details"]["is_blocked"] is True
+        for e in entries
+    )
+
+
+def test_audit_log_requires_admin(client, auth_headers):
+    response = client.get("/users/audit-log", headers=auth_headers)
+    assert response.status_code == 403

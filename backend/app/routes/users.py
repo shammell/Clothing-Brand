@@ -1,8 +1,11 @@
+from datetime import datetime, timezone
+
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.database import get_database
+from app.models.audit import AuditLogEntry
 from app.models.user import UserBlockUpdate, UserRoleUpdate, UserSummary
 from app.services.auth_service import CurrentUser, require_admin
 
@@ -27,11 +30,41 @@ def parse_user_id(user_id: str) -> ObjectId:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid user id") from error
 
 
+def serialize_audit_entry(entry: dict) -> dict:
+    return {
+        "id": str(entry["_id"]),
+        "actor_id": entry["actor_id"],
+        "action": entry["action"],
+        "target_user_id": entry["target_user_id"],
+        "details": entry.get("details", {}),
+        "created_at": entry["created_at"],
+    }
+
+
+async def record_audit(db, actor_id: str, action: str, target_user_id: str, details: dict) -> None:
+    await db["audit_log"].insert_one(
+        {
+            "actor_id": actor_id,
+            "action": action,
+            "target_user_id": target_user_id,
+            "details": details,
+            "created_at": datetime.now(timezone.utc),
+        }
+    )
+
+
 @router.get("/", response_model=list[UserSummary])
 async def list_users(_: CurrentUser = Depends(require_admin)):
     db = get_database()
     users = await db["users"].find({}).sort("created_at", -1).to_list(length=500)
     return [serialize_user(user) for user in users]
+
+
+@router.get("/audit-log", response_model=list[AuditLogEntry])
+async def list_audit_log(_: CurrentUser = Depends(require_admin)):
+    db = get_database()
+    entries = await db["audit_log"].find({}).sort("created_at", -1).to_list(length=200)
+    return [serialize_audit_entry(entry) for entry in entries]
 
 
 @router.patch("/{user_id}/role", response_model=UserSummary)
@@ -49,6 +82,7 @@ async def update_user_role(
     )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await record_audit(db, current_user["user_id"], "role_change", user_id, {"new_role": update.role})
     updated = await db["users"].find_one({"_id": object_id})
     return serialize_user(updated)
 
@@ -68,5 +102,6 @@ async def update_user_block(
     )
     if not result:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    await record_audit(db, current_user["user_id"], "block_change", user_id, {"is_blocked": update.is_blocked})
     updated = await db["users"].find_one({"_id": object_id})
     return serialize_user(updated)
