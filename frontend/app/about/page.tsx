@@ -1,6 +1,10 @@
-"use client";
-
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "About us — Thread&Co",
+  description: "The story behind Thread&Co's everyday essentials.",
+};
 
 export default function AboutPage() {
   return (

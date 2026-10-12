@@ -1,6 +1,10 @@
-"use client";
-
+import type { Metadata } from "next";
 import Link from "next/link";
+
+export const metadata: Metadata = {
+  title: "Policies — Thread&Co",
+  description: "Privacy policy, terms of service, and returns & refunds for Thread&Co.",
+};
 
 export default function PoliciesPage() {
   return (
