@@ -26,7 +26,7 @@ export function ProductCard({
 }: ProductCardProps) {
   const selection = getSelection(product);
   return (
-    <article className="product-card reveal">
+    <article className="product-card">
       <div className="product-image">
         {product.badge && <span className="badge">{product.badge}</span>}
         <Link href={`/products/${product.id}`}>
