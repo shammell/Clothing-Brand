@@ -1,3 +1,6 @@
+import pytest
+
+
 def test_list_users_requires_admin(client, auth_headers):
     response = client.get("/users/", headers=auth_headers)
     assert response.status_code == 403
@@ -122,3 +125,42 @@ def test_block_change_is_recorded_in_audit_log(client, admin_headers, register_u
 def test_audit_log_requires_admin(client, auth_headers):
     response = client.get("/users/audit-log", headers=auth_headers)
     assert response.status_code == 403
+
+
+def test_role_change_does_not_apply_if_audit_write_fails(client, admin_headers, register_user, monkeypatch):
+    register_user(email="target3@example.com")
+    users_response = client.get("/users/", headers=admin_headers)
+    target_id = next(u["id"] for u in users_response.json() if u["email"] == "target3@example.com")
+
+    async def _raise(*args, **kwargs):
+        raise RuntimeError("audit write failed")
+
+    monkeypatch.setattr("app.routes.users.record_audit", _raise)
+
+    with pytest.raises(RuntimeError):
+        client.patch(f"/users/{target_id}/role", headers=admin_headers, json={"role": "lister"})
+
+    # The role change must not have taken effect - the audit write happens
+    # before the state change precisely so a failed audit can never leave a
+    # sensitive permission change applied with no record of who made it.
+    users_after = client.get("/users/", headers=admin_headers).json()
+    target_after = next(u for u in users_after if u["id"] == target_id)
+    assert target_after["role"] == "customer"
+
+
+def test_block_change_does_not_apply_if_audit_write_fails(client, admin_headers, register_user, monkeypatch):
+    register_user(email="target4@example.com")
+    users_response = client.get("/users/", headers=admin_headers)
+    target_id = next(u["id"] for u in users_response.json() if u["email"] == "target4@example.com")
+
+    async def _raise(*args, **kwargs):
+        raise RuntimeError("audit write failed")
+
+    monkeypatch.setattr("app.routes.users.record_audit", _raise)
+
+    with pytest.raises(RuntimeError):
+        client.patch(f"/users/{target_id}/block", headers=admin_headers, json={"is_blocked": True})
+
+    users_after = client.get("/users/", headers=admin_headers).json()
+    target_after = next(u for u in users_after if u["id"] == target_id)
+    assert target_after["is_blocked"] is False

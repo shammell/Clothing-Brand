@@ -77,12 +77,16 @@ async def update_user_role(
     if object_id == ObjectId(current_user["user_id"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot change your own role")
     db = get_database()
-    result = await db["users"].find_one_and_update(
-        {"_id": object_id}, {"$set": {"role": update.role}}
-    )
-    if not result:
+    target = await db["users"].find_one({"_id": object_id})
+    if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    # Audited before the change is applied, not after - a role change is a
+    # permission grant, and failing to record who made it must block the
+    # grant rather than let it through unaudited. Reversed order (change
+    # first, audit best-effort after) would let a transient audit-write
+    # failure leave the change applied with no record of who made it.
     await record_audit(db, current_user["user_id"], "role_change", user_id, {"new_role": update.role})
+    await db["users"].update_one({"_id": object_id}, {"$set": {"role": update.role}})
     updated = await db["users"].find_one({"_id": object_id})
     return serialize_user(updated)
 
@@ -97,11 +101,12 @@ async def update_user_block(
     if object_id == ObjectId(current_user["user_id"]):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cannot block your own account")
     db = get_database()
-    result = await db["users"].find_one_and_update(
-        {"_id": object_id}, {"$set": {"is_blocked": update.is_blocked}}
-    )
-    if not result:
+    target = await db["users"].find_one({"_id": object_id})
+    if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    # Same audited-before-applied ordering as update_user_role, and for the
+    # same reason - see that function's comment.
     await record_audit(db, current_user["user_id"], "block_change", user_id, {"is_blocked": update.is_blocked})
+    await db["users"].update_one({"_id": object_id}, {"$set": {"is_blocked": update.is_blocked}})
     updated = await db["users"].find_one({"_id": object_id})
     return serialize_user(updated)
