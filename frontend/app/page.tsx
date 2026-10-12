@@ -22,72 +22,6 @@ import { useInViewport } from "@/lib/useInViewport";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
-const products: Product[] = [
-  {
-    id: "demo-1",
-    name: "Classic Cotton T-Shirt",
-    category: "T-Shirts",
-    price: 19.99,
-    rating: 4.5,
-    image: "/products/cotton-tshirt.svg",
-    colors: ["#171717", "#f5f5f4", "#243b53"],
-    sizes: ["S", "M", "L", "XL"],
-    badge: "Bestseller",
-  },
-  {
-    id: "demo-2",
-    name: "Slim Fit Denim Jeans",
-    category: "Jeans",
-    price: 49.99,
-    rating: 4.3,
-    image: "/products/denim-jeans.svg",
-    colors: ["#31506b", "#171717"],
-    sizes: ["30", "32", "34", "36"],
-  },
-  {
-    id: "demo-3",
-    name: "Lightweight Summer Dress",
-    category: "Dresses",
-    price: 39.99,
-    rating: 4.7,
-    image: "/products/summer-dress.svg",
-    colors: ["#b94343", "#fafafa", "#d3a4a0"],
-    sizes: ["XS", "S", "M", "L"],
-    badge: "New",
-  },
-  {
-    id: "demo-4",
-    name: "Classic Zip Hoodie",
-    category: "Hoodies",
-    price: 44.99,
-    rating: 4.6,
-    image: "/products/zip-hoodie.svg",
-    colors: ["#9b9b98", "#171717", "#38533d"],
-    sizes: ["S", "M", "L", "XL"],
-  },
-  {
-    id: "demo-5",
-    name: "Leather Casual Sneakers",
-    category: "Shoes",
-    price: 59.99,
-    rating: 4.4,
-    image: "/products/casual-sneakers.svg",
-    colors: ["#f5f5f5", "#171717"],
-    sizes: ["7", "8", "9", "10", "11"],
-  },
-  {
-    id: "demo-6",
-    name: "Relaxed Linen Shirt",
-    category: "Shirts",
-    price: 34.99,
-    rating: 4.8,
-    image: "/products/linen-shirt.svg",
-    colors: ["#e6dfd1", "#d6dce1", "#fafafa"],
-    sizes: ["S", "M", "L", "XL"],
-    badge: "Trending",
-  },
-];
-
 const categories = ["All", "T-Shirts", "Jeans", "Dresses", "Hoodies", "Shoes", "Shirts"];
 
 type ChatMessage = { role: "user" | "assistant"; content: string };
@@ -117,7 +51,7 @@ function loadChatHistory(): ChatMessage[] {
 export default function Home() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [query, setQuery] = useState("");
-  const [catalog, setCatalog] = useState<Product[]>(products);
+  const [catalog, setCatalog] = useState<Product[]>([]);
   const cart = useSyncExternalStore(subscribeToStorage, getCartSnapshot, getCartServerSnapshot);
   const addToCartApi = useAddToCart();
   const wishlist = useSyncExternalStore(subscribeToStorage, getWishlistSnapshot, getWishlistServerSnapshot);
@@ -126,7 +60,8 @@ export default function Home() {
   const [chatHistory, setChatHistory] = useState<ChatMessage[]>(loadChatHistory);
   const [chatLoading, setChatLoading] = useState(false);
   const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
-  const [isLiveCatalog, setIsLiveCatalog] = useState(false);
+  const [productsLoading, setProductsLoading] = useState(true);
+  const [productsError, setProductsError] = useState(false);
 
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
@@ -175,15 +110,26 @@ export default function Home() {
     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory.slice(-20)));
   }, [chatHistory]);
 
-  useEffect(() => {
+  const loadProducts = () => {
+    setProductsLoading(true);
+    setProductsError(false);
     fetch(`${API_BASE}/products/`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Products unavailable"))))
       .then((data: Array<Record<string, unknown>>) => {
-        if (!data.length) return;
         setCatalog(data.map(productFromApi));
-        setIsLiveCatalog(true);
       })
-      .catch(() => undefined);
+      // A failed fetch surfaces a retry banner instead of silently keeping
+      // whatever was in `catalog` - this page used to fall back to a
+      // hardcoded demo list on any failure, which looked identical to a
+      // working storefront and hid real outages (and never showed products
+      // added after the demo list was written).
+      .catch(() => setProductsError(true))
+      .finally(() => setProductsLoading(false));
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    loadProducts();
   }, []);
 
   const filteredProducts = useMemo(
@@ -290,24 +236,37 @@ export default function Home() {
       <section className="products-section" id="shop">
         <div className="section-heading">
           <div><p className="eyebrow">CURATED FOR YOU</p><h2>Fresh picks</h2></div>
-          <span>{filteredProducts.length} styles{!isLiveCatalog && " · demo preview, backend offline"}</span>
+          <span>{productsLoading ? "Loading..." : productsError ? "" : `${filteredProducts.length} styles`}</span>
         </div>
-        <div className="product-grid">
-          {filteredProducts.slice(0, 6).map((product) => (
-            <ProductCard
-              key={product.id}
-              product={product}
-              wishlist={wishlist}
-              onToggleWishlist={(id) => toggleWishlist(wishlist, id)}
-              {...addToCartApi}
-            />
-          ))}
-        </div>
-        <div style={{ textAlign: "center", marginTop: 40 }}>
-          <Link href="/shop" className="primary-button interactive" style={{ display: "inline-block" }}>
-            Shop all <span>→</span>
-          </Link>
-        </div>
+        {productsLoading && <p className="detail-status">Loading products...</p>}
+        {!productsLoading && productsError && (
+          <div className="detail-status">
+            <p>Couldn&apos;t load products right now.</p>
+            <button type="button" className="primary-button interactive" onClick={loadProducts} style={{ marginTop: 16, cursor: "pointer" }}>
+              Retry
+            </button>
+          </div>
+        )}
+        {!productsLoading && !productsError && (
+          <>
+            <div className="product-grid">
+              {filteredProducts.slice(0, 6).map((product) => (
+                <ProductCard
+                  key={product.id}
+                  product={product}
+                  wishlist={wishlist}
+                  onToggleWishlist={(id) => toggleWishlist(wishlist, id)}
+                  {...addToCartApi}
+                />
+              ))}
+            </div>
+            <div style={{ textAlign: "center", marginTop: 40 }}>
+              <Link href="/shop" className="primary-button interactive" style={{ display: "inline-block" }}>
+                Shop all <span>→</span>
+              </Link>
+            </div>
+          </>
+        )}
       </section>
 
       <section ref={newBannerRef} className={`story-banner reveal${newBannerVisible ? " is-visible" : ""}`} id="new">
