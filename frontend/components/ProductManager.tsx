@@ -56,7 +56,15 @@ function formToPayload(form: ProductFormState) {
 
 const inputClass = "border border-neutral-300 px-3 py-2 text-sm w-full";
 
-export function ProductManager({ authToken, onSessionExpired }: { authToken: string; onSessionExpired: () => void }) {
+export function ProductManager({
+  authToken,
+  onSessionExpired,
+  onProductsChange,
+}: {
+  authToken: string;
+  onSessionExpired: () => void;
+  onProductsChange?: (products: Product[]) => void;
+}) {
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState("");
@@ -95,7 +103,9 @@ export function ProductManager({ authToken, onSessionExpired }: { authToken: str
         setProductsError(extractErrorMessage(data, "Could not load products."));
         return;
       }
-      setProducts(data as Product[]);
+      const loaded = data as Product[];
+      setProducts(loaded);
+      onProductsChange?.(loaded);
     } catch {
       setProductsError("Could not connect to the server.");
     } finally {
@@ -110,6 +120,10 @@ export function ProductManager({ authToken, onSessionExpired }: { authToken: str
     // the existing disable this pattern already has elsewhere in this app.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadProducts();
+    // loadProducts is a plain function recreated every render (not
+    // memoized), so including it would re-run this effect - and re-fetch -
+    // on every render instead of only on mount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const resetForm = () => {
