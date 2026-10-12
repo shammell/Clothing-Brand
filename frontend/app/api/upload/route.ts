@@ -1,5 +1,6 @@
 import { handleUpload, type HandleUploadBody } from "@vercel/blob/client";
 import { NextResponse } from "next/server";
+import { resolveAuthMeUrl } from "@/lib/resolveAuthMeUrl";
 import { assertCanUploadImages } from "@/lib/uploadAuth";
 
 export async function POST(request: Request): Promise<NextResponse> {
@@ -11,8 +12,7 @@ export async function POST(request: Request): Promise<NextResponse> {
       request,
       onBeforeGenerateToken: async (_pathname, clientPayload) => {
         const token = typeof clientPayload === "string" ? clientPayload : "";
-        const meUrl = new URL("/api/auth/me", request.url);
-        const meResponse = await fetch(meUrl, { headers: { Authorization: `Bearer ${token}` } });
+        const meResponse = await fetch(resolveAuthMeUrl(), { headers: { Authorization: `Bearer ${token}` } });
         if (!meResponse.ok) throw new Error("Not authenticated");
         const me = (await meResponse.json()) as { role: string };
         assertCanUploadImages(me.role);
