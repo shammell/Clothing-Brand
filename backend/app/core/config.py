@@ -62,6 +62,8 @@ class Settings(BaseSettings):
     # allow-list below today's dev-only defaults.
     ALLOWED_ORIGINS: str = ""
     SENTRY_DSN: str | None = None
+    RESEND_API_KEY: str | None = None
+    FRONTEND_URL: str = "http://localhost:3000"
 
     class Config:
         env_file = ".env"
