@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
 from pymongo.errors import DuplicateKeyError, PyMongoError
 
 from app.core.database import get_database
@@ -22,6 +22,7 @@ def serialize_order(order: dict) -> dict:
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
 async def create_order(
     order: OrderCreate,
+    background_tasks: BackgroundTasks,
     current_user: CurrentUser = Depends(get_current_user),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ):
@@ -171,7 +172,12 @@ async def create_order(
             )
         raise
     order_doc["_id"] = result.inserted_id
-    send_email(
+    # Backgrounded, not called inline - send_email() makes a blocking HTTP
+    # call to Resend's API, and calling it directly in this async handler
+    # would block the single-threaded event loop for every concurrent
+    # checkout for however long that call takes.
+    background_tasks.add_task(
+        send_email,
         to=current_user["email"],
         subject=f"Order confirmed — #{str(order_doc['_id'])[-8:]}",
         html=f"<p>Thanks for your order! Total: ${total:.2f}.</p>",
