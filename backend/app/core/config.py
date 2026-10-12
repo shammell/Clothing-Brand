@@ -61,6 +61,7 @@ class Settings(BaseSettings):
     # with DEFAULT_DEV_ORIGINS below - empty/unset must never shrink the
     # allow-list below today's dev-only defaults.
     ALLOWED_ORIGINS: str = ""
+    SENTRY_DSN: str | None = None
 
     class Config:
         env_file = ".env"

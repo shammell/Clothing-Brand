@@ -1,7 +1,9 @@
 from contextlib import asynccontextmanager
 
+import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -22,6 +24,9 @@ async def lifespan(_: FastAPI):
     yield
     await close_db()
 
+
+if settings.SENTRY_DSN:
+    sentry_sdk.init(dsn=settings.SENTRY_DSN, integrations=[FastApiIntegration()], traces_sample_rate=0.1)
 
 app = FastAPI(title="Thread&Co API", version="1.0.0", lifespan=lifespan)
 app.state.limiter = limiter
