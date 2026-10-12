@@ -8,6 +8,7 @@ from pymongo.errors import DuplicateKeyError, PyMongoError
 from app.core.database import get_database
 from app.models.order import OrderCreate, OrderItemResponse, OrderResponse, OrderStatusUpdate
 from app.services.auth_service import CurrentUser, get_current_user, require_admin
+from app.services.email_service import send_email
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -170,6 +171,11 @@ async def create_order(
             )
         raise
     order_doc["_id"] = result.inserted_id
+    send_email(
+        to=current_user["email"],
+        subject=f"Order confirmed — #{str(order_doc['_id'])[-8:]}",
+        html=f"<p>Thanks for your order! Total: ${total:.2f}.</p>",
+    )
     return serialize_order(order_doc)
 
 

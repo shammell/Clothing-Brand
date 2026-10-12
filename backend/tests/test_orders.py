@@ -319,3 +319,23 @@ def test_cancelling_twice_does_not_double_restore_stock(client, auth_headers, ad
     client.patch(f"/orders/{order['id']}/status", headers=admin_headers, json={"status": "cancelled"})
 
     assert client.get(f"/products/{product_id}").json()["stock"] == 10
+
+
+def test_create_order_sends_confirmation_email(client, auth_headers, seed_product, monkeypatch):
+    sent = []
+    monkeypatch.setattr(
+        "app.routes.orders.send_email",
+        lambda to, subject, html: sent.append((to, subject, html)) or True,
+    )
+    product_id = seed_product(stock=5)
+    response = client.post(
+        "/orders/",
+        headers=auth_headers,
+        json={
+            "items": [{"product_id": product_id, "quantity": 1, "size": "S", "color": "Black"}],
+            "shipping_address": SAMPLE_ADDRESS,
+        },
+    )
+    assert response.status_code == 201
+    assert len(sent) == 1
+    assert sent[0][0] == "test@example.com"
