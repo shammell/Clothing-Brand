@@ -63,6 +63,11 @@ class Settings(BaseSettings):
     ALLOWED_ORIGINS: str = ""
     SENTRY_DSN: str | None = None
     RESEND_API_KEY: str | None = None
+    # Where /contact submissions get emailed. Must be an address Resend can
+    # actually deliver to - in sandbox mode (no verified sending domain)
+    # that's only the Resend account's own verified address, never a
+    # placeholder like the FROM_ADDRESS sender identity itself.
+    SUPPORT_EMAIL: str | None = None
     FRONTEND_URL: str = "http://localhost:3000"
 
     class Config:
