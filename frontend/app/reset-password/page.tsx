@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Suspense, useState, type FormEvent } from "react";
+import { Suspense, useEffect, useState, type FormEvent } from "react";
 import { extractErrorMessage } from "@/lib/auth-store";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
@@ -10,7 +10,18 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 function ResetPasswordContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") ?? "";
+  // Captured once, from the URL this page first loaded with - not re-read
+  // from searchParams on every render, because the token is then scrubbed
+  // out of the URL below and must not disappear from this component too.
+  const [token] = useState(() => searchParams.get("token") ?? "");
+  // Left in the address bar, the token lingers in browser history, can be
+  // read back via the Referer header by anything else the page loads, and
+  // gets swept up by page-view analytics (this app loads Vercel Analytics
+  // on every page). None of those should ever see it.
+  useEffect(() => {
+    if (token) router.replace("/reset-password");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [newPassword, setNewPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
