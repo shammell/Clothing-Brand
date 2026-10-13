@@ -98,3 +98,21 @@ describe("useAddToCart variant ceiling", () => {
     expect(result.current.getSelection(product).quantity).toBe(4);
   });
 });
+
+describe("useAddToCart colour change", () => {
+  it("clears the size when the new colour has it sold out", () => {
+    const { result } = renderHook(() => useAddToCart());
+    const product = makeProduct({
+      colors: ["Black", "White"],
+      variants: [
+        { size: "S", color: "Black", stock: 3 },
+        { size: "S", color: "White", stock: 0 },
+        { size: "M", color: "Black", stock: 3 },
+        { size: "M", color: "White", stock: 3 },
+      ],
+    });
+    act(() => result.current.selectSize(product, "S"));
+    act(() => result.current.selectColor(product, "White"));
+    expect(result.current.getSelection(product)).toMatchObject({ color: "White", size: "" });
+  });
+});

@@ -3,9 +3,11 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { subscribeToStorage } from "@/lib/auth-store";
+import { ColorSelector } from "@/components/ColorSelector";
+import { ProductImage } from "@/components/ProductImage";
+import { SizeSelector } from "@/components/SizeSelector";
 import { SiteFooter } from "@/components/SiteFooter";
 import {
-  FALLBACK_IMAGE,
   type Product,
   getWishlistServerSnapshot,
   getWishlistSnapshot,
@@ -55,14 +57,7 @@ export default function ProductDetailPage() {
         <section className="product-detail">
           <div className="product-detail-image">
             {product.badge && <span className="badge">{product.badge}</span>}
-            <img
-              src={product.image}
-              alt={product.name}
-              onError={(event) => {
-                event.currentTarget.onerror = null;
-                event.currentTarget.src = FALLBACK_IMAGE;
-              }}
-            />
+            <ProductImage src={product.image} alt={product.name} priority />
           </div>
           <div className="product-detail-info">
             {product.brand && <p className="eyebrow">{product.brand}</p>}
@@ -72,34 +67,10 @@ export default function ProductDetailPage() {
             <span className="stars">★★★★★ <small>{product.rating}</small></span>
             {product.description && <p className="product-detail-description">{product.description}</p>}
 
-            <div className="size-row">
-              {product.sizes.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={selection.size === size ? "size-chip active" : "size-chip"}
-                  aria-pressed={selection.size === size}
-                  onClick={() => selectSize(product, size)}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
+            <SizeSelector product={product} color={selection.color} value={selection.size} onSelect={(size) => selectSize(product, size)} variant="full" showError={sizeErrors[product.id]} />
             {sizeErrors[product.id] && <p className="size-error">Select a size to add to bag</p>}
 
-            <span className="swatches">
-              {product.colors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={selection.color === color ? "swatch active" : "swatch"}
-                  style={{ backgroundColor: color }}
-                  aria-label={`Select color ${color}`}
-                  aria-pressed={selection.color === color}
-                  onClick={() => selectColor(product, color)}
-                />
-              ))}
-            </span>
+            <ColorSelector product={product} value={selection.color} onSelect={(color) => selectColor(product, color)} variant="full" />
 
             <div className="quantity-row">
               <button type="button" aria-label="Decrease quantity" onClick={() => setQuantity(product, selection.quantity - 1)}>−</button>

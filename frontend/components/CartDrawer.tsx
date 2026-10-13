@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useSyncExternalStore } from "react";
-import { FALLBACK_IMAGE } from "@/lib/shop-store";
+import { ProductImage } from "@/components/ProductImage";
 import { useCart } from "@/lib/useCart";
 import { closeCartDrawer, getUiServerSnapshot, getUiSnapshot, subscribeToUi } from "@/lib/ui-store";
 
@@ -55,14 +55,7 @@ export function CartDrawer() {
           <div className="drawer-lines">
             {cart.map((item, index) => (
               <div className="cart-item drawer-line" key={`${item.id}-${item.size}-${item.color}`}>
-                <img
-                  src={item.image}
-                  alt={item.name}
-                  onError={(event) => {
-                    event.currentTarget.onerror = null;
-                    event.currentTarget.src = FALLBACK_IMAGE;
-                  }}
-                />
+                <ProductImage src={item.image} alt={item.name} />
                 <div>
                   <b>{item.name}</b>
                   <small>{item.size}{item.color ? ` · ${item.color}` : ""}</small>

@@ -62,8 +62,12 @@ export function useAddToCart() {
     setSizeErrors((current) => ({ ...current, [product.id]: false }));
   };
 
+  // A colour change that leaves the chosen size sold out clears the size, so an
+  // unavailable pair is never left selected.
   const selectColor = (product: Product, color: string) => {
-    changeVariant(product, { color });
+    const { size } = getSelection(product);
+    const clearSize = size && variantStock(product, size, color) === 0;
+    changeVariant(product, clearSize ? { color, size: "" } : { color });
   };
 
   const setQuantity = (product: Product, quantity: number) => {

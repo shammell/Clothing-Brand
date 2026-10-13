@@ -51,8 +51,11 @@ h1 em,h2 em { color:var(--accent); font-style:italic; }
 .section-heading h2 { font-size:49px; }
 .section-heading > span { color:var(--muted); font-size:11px; }
 .product-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:30px 18px; }
-.product-image { height:380px; overflow:hidden; position:relative; background:#e7e2dc; }
-.product-image img { width:100%; height:100%; object-fit:cover; transition:transform var(--dur-slow) var(--ease-out); }
+.product-image { aspect-ratio:4/5; overflow:hidden; position:relative; background:#e7e2dc; }
+.product-img { opacity:0; transition:opacity var(--dur-base) var(--ease-out); }
+.product-img.loaded { opacity:1; }
+.product-image a { display:block; height:100%; }
+.product-image img { width:100%; height:100%; object-fit:cover; transition:transform var(--dur-slow) var(--ease-out), opacity var(--dur-base) var(--ease-out); }
 .product-card:hover .product-image img { transform:scale(1.04); }
 .badge { position:absolute; z-index:1; left:13px; top:13px; background:white; color:var(--accent); padding:7px 10px; font-size:9px; text-transform:uppercase; letter-spacing:.1em; }
 .heart { position:absolute; right:14px; top:10px; background:white; border:0; width:31px; height:31px; border-radius:50%; font-size:20px; color:var(--ink); }
@@ -78,8 +81,21 @@ h1 em,h2 em { color:var(--accent); font-style:italic; }
 .swatches { display:flex; gap:5px; }
 .swatch { width:13px; height:13px; display:block; border-radius:50%; border:1px solid #c8c2ba; padding:0; cursor:pointer; }
 .swatch.active { border:2px solid var(--accent); }
+.swatches-full { gap:8px; align-items:center; margin-top:14px; }
+.swatch-full { width:28px; height:28px; position:relative; box-shadow:0 0 0 8px transparent; transition:border-color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.swatch.sold-out { opacity:.55; overflow:hidden; }
+.swatch.sold-out::after { content:""; position:absolute; inset:0; background:linear-gradient(to top right, transparent calc(50% - 1px), #25221f 50%, transparent calc(50% + 1px)); }
+.swatch-compact { position:relative; }
+.swatch-name { font-size:12px; color:var(--muted); margin-left:10px; }
 .size-row { display:flex; gap:6px; flex-wrap:wrap; padding-top:12px; }
-.size-chip { border:1px solid var(--line); background:white; color:var(--ink); font-size:10px; padding:4px 9px; }
+.size-chip { border:1px solid var(--line); background:white; color:var(--ink); font-size:10px; padding:4px 9px; position:relative; transition:background-color var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out), color var(--dur-fast) var(--ease-out), transform var(--dur-fast) var(--ease-out); }
+.size-chip:active { transform:scale(.96); }
+.size-chip-full { min-width:44px; min-height:44px; font-size:13px; padding:8px 14px; }
+.size-chip.sold-out { color:#6f685f; background:#f1ede7; text-decoration:line-through; cursor:not-allowed; }
+.low-dot { position:absolute; top:2px; right:2px; width:5px; height:5px; border-radius:50%; background:var(--accent); }
+.size-low, .size-note { color:#8a4a2f; font-size:12px; margin:8px 0 0; }
+.size-row.shake { animation:shake var(--dur-base) var(--ease-in-out); }
+@keyframes shake { 20%,60% { transform:translateX(-4px); } 40%,80% { transform:translateX(4px); } }
 .size-chip.active { border-color:var(--ink); background:var(--ink); color:white; }
 .size-error { color:#b94343; font-size:10px; margin:6px 0 0; }
 .quantity-row { display:flex; align-items:center; gap:14px; padding-top:12px; }
@@ -89,7 +105,7 @@ h1 em,h2 em { color:var(--accent); font-style:italic; }
 .back-link:hover { color:var(--accent); }
 .detail-status { text-align:center; padding:120px 24px; color:var(--muted); font-size:14px; }
 .product-detail { display:grid; grid-template-columns:1fr 1fr; gap:6vw; padding:60px 8vw 100px; }
-.product-detail-image { position:relative; background:#e7e2dc; min-height:520px; }
+.product-detail-image { position:relative; background:#e7e2dc; aspect-ratio:4/5; }
 .product-detail-image img { width:100%; height:100%; object-fit:cover; position:absolute; inset:0; }
 .product-detail-info { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
 /* h1 globally is sized for the homepage hero (clamp up to 91px) - a product
@@ -195,7 +211,7 @@ html:has(dialog[open]) { overflow:hidden; scrollbar-gutter:stable; }
   .nav-links { display:none; }.navbar { padding:0 20px; }.search-box { display:none; }
   .hero { grid-template-columns:1fr; }.hero-image { min-height:420px; }.hero-copy { padding:70px 24px; }
   .category-strip { display:block; padding:25px 24px; }.category-list { gap:14px; overflow-x:auto; margin-top:15px; }
-  .products-section { padding:55px 24px 70px; }.product-grid { grid-template-columns:repeat(2,1fr); gap:25px 10px; }.product-image { height:270px; }
+  .products-section { padding:55px 24px 70px; }.product-grid { grid-template-columns:repeat(2,1fr); gap:25px 10px; }
   .product-info h3 { font-size:14px; }.story-banner { grid-template-columns:1fr; padding:65px 24px; gap:35px; }.story-banner h2 { font-size:48px; }
   footer { flex-direction:column; gap:18px; align-items:flex-start; }.chat-window { right:15px; bottom:75px; }.chat-fab { right:15px; }
   /* Stacked layout puts the link row at the very bottom of the page,
@@ -203,7 +219,7 @@ html:has(dialog[open]) { overflow:hidden; scrollbar-gutter:stable; }
      doesn't apply here since nothing is side-by-side anymore, so this
      needs its own bottom clearance instead. */
   footer.has-chat-fab { padding-right:8vw; padding-bottom:90px; }
-  .product-detail { grid-template-columns:1fr; padding:30px 24px 70px; gap:30px; }.product-detail-image { min-height:360px; }
+  .product-detail { grid-template-columns:1fr; padding:30px 24px 70px; gap:30px; }
 }
 
 /* Micro-interactions (hover/press feedback) - applied via class, not
