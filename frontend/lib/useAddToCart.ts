@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { type CartLine, type Product, getCartSnapshot, writeCart } from "./shop-store";
+import { addedAnnouncement, announce, cartDrawerSuppressedFor, openCartDrawer } from "./ui-store";
+import { firstAvailableColor, variantStock } from "./variants";
 
 // Deliberate, brief pacing for the "Add to bag" button's adding -> added
 // transition - the cart write itself is synchronous (local state, no network
@@ -14,6 +16,14 @@ const MAX_QUANTITY = 20;
 
 type Selection = { size: string; color: string; quantity: number };
 
+// A selected variant's own stock wins; products without variant data keep the
+// old product-level ceiling.
+function quantityCeiling(product: Product, selection: Pick<Selection, "size" | "color">): number {
+  const variant = selection.size ? variantStock(product, selection.size, selection.color) : undefined;
+  if (variant !== undefined) return Math.min(Math.max(variant, 1), MAX_QUANTITY);
+  return product.stock && product.stock > 0 ? Math.min(product.stock, MAX_QUANTITY) : MAX_QUANTITY;
+}
+
 // Shared by the product grid and the product detail page - both need
 // identical size/color/quantity selection and add-to-cart-with-feedback
 // behavior, and duplicating this (timeouts, merge-on-add logic, etc.) across
@@ -22,6 +32,7 @@ type Selection = { size: string; color: string; quantity: number };
 export function useAddToCart() {
   const [selections, setSelections] = useState<Record<string, Selection>>({});
   const [sizeErrors, setSizeErrors] = useState<Record<string, boolean>>({});
+  const [variantErrors, setVariantErrors] = useState<Record<string, boolean>>({});
   const [addStatus, setAddStatus] = useState<Record<string, "adding" | "added">>({});
   const addTimeoutsRef = useRef<Record<string, ReturnType<typeof setTimeout>[]>>({});
 
@@ -36,19 +47,31 @@ export function useAddToCart() {
   }, []);
 
   const getSelection = (product: Product): Selection =>
-    selections[product.id] ?? { size: "", color: product.colors[0] ?? "", quantity: 1 };
+    selections[product.id] ?? { size: "", color: firstAvailableColor(product), quantity: 1 };
+
+  // Changing size or color can lower the ceiling, so re-clamp the quantity.
+  const changeVariant = (product: Product, change: Partial<Pick<Selection, "size" | "color">>) => {
+    const next = { ...getSelection(product), ...change };
+    next.quantity = Math.min(next.quantity, quantityCeiling(product, next));
+    setSelections((current) => ({ ...current, [product.id]: next }));
+    setVariantErrors((current) => ({ ...current, [product.id]: false }));
+  };
 
   const selectSize = (product: Product, size: string) => {
-    setSelections((current) => ({ ...current, [product.id]: { ...getSelection(product), size } }));
+    changeVariant(product, { size });
     setSizeErrors((current) => ({ ...current, [product.id]: false }));
   };
 
+  // A colour change that leaves the chosen size sold out clears the size, so an
+  // unavailable pair is never left selected.
   const selectColor = (product: Product, color: string) => {
-    setSelections((current) => ({ ...current, [product.id]: { ...getSelection(product), color } }));
+    const { size } = getSelection(product);
+    const clearSize = size && variantStock(product, size, color) === 0;
+    changeVariant(product, clearSize ? { color, size: "" } : { color });
   };
 
   const setQuantity = (product: Product, quantity: number) => {
-    const ceiling = product.stock && product.stock > 0 ? Math.min(product.stock, MAX_QUANTITY) : MAX_QUANTITY;
+    const ceiling = quantityCeiling(product, getSelection(product));
     const clamped = Math.min(Math.max(1, Math.trunc(quantity) || 1), ceiling);
     setSelections((current) => ({ ...current, [product.id]: { ...getSelection(product), quantity: clamped } }));
   };
@@ -59,7 +82,11 @@ export function useAddToCart() {
       setSizeErrors((current) => ({ ...current, [product.id]: true }));
       return;
     }
-
+    if (variantStock(product, selection.size, selection.color) === 0) {
+      setVariantErrors((current) => ({ ...current, [product.id]: true }));
+      return;
+    }
+    const ceiling = quantityCeiling(product, selection);
     // Read fresh from storage rather than closing over a `cart` value from
     // render scope - this runs from an event handler, and another component
     // (e.g. the product grid and the detail page mounted at the same time)
@@ -72,10 +99,11 @@ export function useAddToCart() {
     const nextCart: CartLine[] =
       existingIndex >= 0
         ? currentCart.map((line, index) =>
-            index === existingIndex ? { ...line, quantity: line.quantity + selection.quantity } : line,
+            index === existingIndex ? { ...line, quantity: Math.min(line.quantity + selection.quantity, ceiling) } : line,
           )
         : [...currentCart, { ...product, size: selection.size, color: selection.color, quantity: selection.quantity }];
     writeCart(nextCart);
+    announce(addedAnnouncement(product.name, selection.size, nextCart.reduce((sum, line) => sum + line.quantity, 0)));
 
     // Clear-before-set: if this product was already mid-cycle from a
     // previous click, cancel those pending timeouts first so rapid re-clicks
@@ -85,6 +113,7 @@ export function useAddToCart() {
     setAddStatus((current) => ({ ...current, [product.id]: "adding" }));
     const addedTimeout = setTimeout(() => {
       setAddStatus((current) => ({ ...current, [product.id]: "added" }));
+      if (!cartDrawerSuppressedFor(window.location.pathname)) openCartDrawer();
       const idleTimeout = setTimeout(() => {
         setAddStatus((current) => {
           const next = { ...current };
@@ -97,5 +126,5 @@ export function useAddToCart() {
     addTimeoutsRef.current[product.id] = [addedTimeout];
   };
 
-  return { getSelection, selectSize, selectColor, setQuantity, addToCart, addStatus, sizeErrors };
+  return { getSelection, selectSize, selectColor, setQuantity, addToCart, addStatus, sizeErrors, variantErrors };
 }

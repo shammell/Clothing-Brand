@@ -1,28 +1,35 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { subscribeToStorage } from "@/lib/auth-store";
+import { CompleteTheLook } from "@/components/CompleteTheLook";
+import { ColorSelector } from "@/components/ColorSelector";
+import { ProductImage } from "@/components/ProductImage";
+import { FindMySize } from "@/components/FindMySize";
+import { SizeSelector } from "@/components/SizeSelector";
 import { SiteFooter } from "@/components/SiteFooter";
 import {
-  FALLBACK_IMAGE,
   type Product,
   getWishlistServerSnapshot,
   getWishlistSnapshot,
   productFromApi,
   toggleWishlist,
 } from "@/lib/shop-store";
+import { cacheProducts, getCachedProduct } from "@/lib/product-cache";
 import { useAddToCart } from "@/lib/useAddToCart";
+import { ProductDetailSkeleton } from "@/components/Skeletons";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const productId = params.id;
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [product, setProduct] = useState<Product | null>(() => getCachedProduct(productId));
+  const [loading, setLoading] = useState(() => !getCachedProduct(productId));
   const [loadError, setLoadError] = useState("");
+  const [recommendedSize, setRecommendedSize] = useState<string | null>(null);
   const wishlist = useSyncExternalStore(subscribeToStorage, getWishlistSnapshot, getWishlistServerSnapshot);
   const { getSelection, selectSize, selectColor, setQuantity, addToCart, addStatus, sizeErrors } = useAddToCart();
 
@@ -32,12 +39,20 @@ export default function ProductDetailPage() {
     // known) - the case React's own docs call a valid use of useEffect, not
     // the derived-state anti-pattern this rule targets. No external-store
     // equivalent exists for an on-demand network fetch.
+    // A cached copy renders immediately (so the image can morph in from the
+    // card); the fetch below still refreshes stock in the background.
+    const cached = getCachedProduct(productId);
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
+    setProduct(cached);
+    setLoading(!cached);
     setLoadError("");
     fetch(`${API_BASE}/products/${productId}`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("not found"))))
-      .then((data: Record<string, unknown>) => setProduct(productFromApi(data)))
+      .then((data: Record<string, unknown>) => {
+        const fresh = productFromApi(data);
+        cacheProducts([fresh]);
+        setProduct(fresh);
+      })
       .catch(() => setLoadError("We couldn't find that product."))
       .finally(() => setLoading(false));
   }, [productId]);
@@ -46,26 +61,15 @@ export default function ProductDetailPage() {
 
   return (
     <main className="store-shell">
-      <nav className="navbar">
-        <Link className="brand" href="/">THREAD<span>&</span>CO</Link>
-        <Link href="/" className="back-link">← Back to shop</Link>
-      </nav>
 
-      {loading && <p className="detail-status">Loading...</p>}
+      {loading && <ProductDetailSkeleton />}
       {!loading && loadError && <p className="detail-status">{loadError}</p>}
 
       {!loading && !loadError && product && selection && (
         <section className="product-detail">
           <div className="product-detail-image">
             {product.badge && <span className="badge">{product.badge}</span>}
-            <img
-              src={product.image}
-              alt={product.name}
-              onError={(event) => {
-                event.currentTarget.onerror = null;
-                event.currentTarget.src = FALLBACK_IMAGE;
-              }}
-            />
+            <ProductImage src={product.image} alt={product.name} priority transitionName={`product-image-${product.id}`} />
           </div>
           <div className="product-detail-info">
             {product.brand && <p className="eyebrow">{product.brand}</p>}
@@ -75,34 +79,11 @@ export default function ProductDetailPage() {
             <span className="stars">★★★★★ <small>{product.rating}</small></span>
             {product.description && <p className="product-detail-description">{product.description}</p>}
 
-            <div className="size-row">
-              {product.sizes.map((size) => (
-                <button
-                  key={size}
-                  type="button"
-                  className={selection.size === size ? "size-chip active" : "size-chip"}
-                  aria-pressed={selection.size === size}
-                  onClick={() => selectSize(product, size)}
-                >
-                  {size}
-                </button>
-              ))}
-            </div>
+            <SizeSelector product={product} color={selection.color} value={selection.size} onSelect={(size) => selectSize(product, size)} variant="full" showError={sizeErrors[product.id]} recommendedSize={recommendedSize} />
+            <FindMySize key={product.id} product={product} onSelectSize={(size) => selectSize(product, size)} onRecommendation={setRecommendedSize} />
             {sizeErrors[product.id] && <p className="size-error">Select a size to add to bag</p>}
 
-            <span className="swatches">
-              {product.colors.map((color) => (
-                <button
-                  key={color}
-                  type="button"
-                  className={selection.color === color ? "swatch active" : "swatch"}
-                  style={{ backgroundColor: color }}
-                  aria-label={`Select color ${color}`}
-                  aria-pressed={selection.color === color}
-                  onClick={() => selectColor(product, color)}
-                />
-              ))}
-            </span>
+            <ColorSelector product={product} value={selection.color} onSelect={(color) => selectColor(product, color)} variant="full" />
 
             <div className="quantity-row">
               <button type="button" aria-label="Decrease quantity" onClick={() => setQuantity(product, selection.quantity - 1)}>−</button>
@@ -130,6 +111,7 @@ export default function ProductDetailPage() {
           </div>
         </section>
       )}
+      {!loading && !loadError && product && <CompleteTheLook key={product.id} productId={product.id} />}
       <SiteFooter />
     </main>
   );

@@ -227,7 +227,7 @@ def test_update_order_status_rejects_unknown_value(client, admin_headers, auth_h
 
 
 def test_cancelling_order_restores_stock(client, auth_headers, admin_headers, seed_product):
-    product_id = seed_product(stock=10)
+    product_id = seed_product(stock=10, variants=[{"sku": "X", "size": "S", "color": "Black", "stock": 10}], sizes=["S"], colors=["Black"])
     order = client.post(
         "/orders/",
         headers=auth_headers,
@@ -339,3 +339,85 @@ def test_create_order_sends_confirmation_email(client, auth_headers, seed_produc
     assert response.status_code == 201
     assert len(sent) == 1
     assert sent[0][0] == "test@example.com"
+
+
+VARIANTS = [
+    {"sku": "T-S-BLACK", "size": "S", "color": "Black", "stock": 1},
+    {"sku": "T-M-BLACK", "size": "M", "color": "Black", "stock": 4},
+    {"sku": "T-M-WHITE", "size": "M", "color": "White", "stock": 3},
+]
+
+
+def _variant_product(seed_product):
+    return seed_product(variants=VARIANTS, sizes=["S", "M"], colors=["Black", "White"], stock=8)
+
+
+def _line(product_id, size, color, quantity=1):
+    return {"product_id": product_id, "quantity": quantity, "size": size, "color": color}
+
+
+def _order(client, headers, *lines):
+    return client.post("/orders/", headers=headers, json={"items": list(lines), "shipping_address": SAMPLE_ADDRESS})
+
+
+def _variant_stock(client, product_id):
+    body = client.get(f"/products/{product_id}").json()
+    return {(v["size"], v["color"]): v["stock"] for v in body["variants"]}, body["stock"]
+
+
+def test_last_unit_of_variant_only_affects_that_variant(client, auth_headers, seed_product):
+    product_id = _variant_product(seed_product)
+    assert _order(client, auth_headers, _line(product_id, "S", "Black")).status_code == 201
+
+    second = _order(client, auth_headers, _line(product_id, "S", "Black"))
+    assert second.status_code == 409
+    assert "S / Black" in second.json()["detail"]
+
+    stocks, total = _variant_stock(client, product_id)
+    assert stocks == {("S", "Black"): 0, ("M", "Black"): 4, ("M", "White"): 3}
+    assert total == 7
+
+
+def test_failed_multi_line_order_restores_every_variant(client, auth_headers, seed_product):
+    product_id = _variant_product(seed_product)
+    response = _order(client, auth_headers, _line(product_id, "M", "Black", 2), _line(product_id, "S", "Black", 2))
+    assert response.status_code == 409
+    stocks, total = _variant_stock(client, product_id)
+    assert stocks == {("S", "Black"): 1, ("M", "Black"): 4, ("M", "White"): 3}
+    assert total == 8
+
+
+def test_cancel_restores_variant_once(client, auth_headers, admin_headers, seed_product):
+    product_id = _variant_product(seed_product)
+    order = _order(client, auth_headers, _line(product_id, "M", "White", 2)).json()
+    assert _variant_stock(client, product_id)[0][("M", "White")] == 1
+
+    for _ in range(2):
+        client.patch(f"/orders/{order['id']}/status", headers=admin_headers, json={"status": "cancelled"})
+    stocks, total = _variant_stock(client, product_id)
+    assert stocks[("M", "White")] == 3
+    assert total == 8
+
+
+def test_unmigrated_product_gets_variants_persisted_on_order(client, auth_headers, seed_product):
+    product_id = seed_product(sizes=["S"], colors=["Black"], stock=5)
+    assert _order(client, auth_headers, _line(product_id, "S", "Black", 2)).status_code == 201
+    stocks, total = _variant_stock(client, product_id)
+    assert stocks == {("S", "Black"): 3}
+    assert total == 3
+
+
+def test_order_for_nonexistent_variant_combination_rejected(client, auth_headers, seed_product):
+    product_id = _variant_product(seed_product)
+    response = _order(client, auth_headers, _line(product_id, "S", "White"))
+    assert response.status_code == 400
+
+
+def test_concurrent_orders_for_last_unit_only_one_wins(client, auth_headers, seed_product):
+    from concurrent.futures import ThreadPoolExecutor
+
+    product_id = _variant_product(seed_product)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(pool.map(lambda _: _order(client, auth_headers, _line(product_id, "S", "Black")).status_code, range(2)))
+    assert sorted(results) == [201, 409]
+    assert _variant_stock(client, product_id)[0][("S", "Black")] == 0

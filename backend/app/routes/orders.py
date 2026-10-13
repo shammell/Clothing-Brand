@@ -9,6 +9,7 @@ from app.core.database import get_database
 from app.models.order import OrderCreate, OrderItemResponse, OrderResponse, OrderStatusUpdate
 from app.services.auth_service import CurrentUser, get_current_user, require_admin
 from app.services.email_service import send_email
+from app.services.variants import ensure_variants
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
@@ -17,6 +18,24 @@ def serialize_order(order: dict) -> dict:
     return {
         key: value for key, value in order.items() if key != "_id"
     } | {"id": str(order["_id"])}
+
+
+async def release_variant_stock(
+    products_collection, object_id: ObjectId, size: str, color: str, quantity: int
+) -> None:
+    """Give stock back to one variant (and the product total).
+
+    Falls back to the product total alone when the variant no longer exists
+    (admin removed it) or the order line predates variants.
+    """
+    if size and color:
+        result = await products_collection.update_one(
+            {"_id": object_id, "variants": {"$elemMatch": {"size": size, "color": color}}},
+            {"$inc": {"variants.$.stock": quantity, "stock": quantity}},
+        )
+        if result.modified_count:
+            return
+    await products_collection.update_one({"_id": object_id}, {"$inc": {"stock": quantity}})
 
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -54,10 +73,9 @@ async def create_order(
     product_ids = {item.product_id for item in order.items}
     object_ids = [ObjectId(product_id) for product_id in product_ids]
 
-    products_by_id = {
-        str(product["_id"]): product
-        for product in await products_collection.find({"_id": {"$in": object_ids}}).to_list(length=len(object_ids))
-    }
+    raw_products = await products_collection.find({"_id": {"$in": object_ids}}).to_list(length=len(object_ids))
+    unmigrated_ids = {product["_id"] for product in raw_products if not product.get("variants")}
+    products_by_id = {str(product["_id"]): ensure_variants(product) for product in raw_products}
 
     # Two request lines for the same product+size+color (e.g. the item was
     # added to the cart twice) collapse into one order line with a combined
@@ -81,38 +99,52 @@ async def create_order(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=f"{product['name']} is not available in color {item.color}",
             )
+        if not any(v["size"] == item.size and v["color"] == item.color for v in product["variants"]):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"{product['name']} is not available in {item.size} / {item.color}",
+            )
         variant_key = (item.product_id, item.size, item.color)
         requested_variants[variant_key] = requested_variants.get(variant_key, 0) + item.quantity
 
-    # Stock is tracked per product, not per size/color, so every variant of
-    # the same product still draws from one pool.
-    requested_quantities: dict[str, int] = {}
-    for (product_id, _size, _color), quantity in requested_variants.items():
-        requested_quantities[product_id] = requested_quantities.get(product_id, 0) + quantity
-
-    for product_id, quantity in requested_quantities.items():
+    for (product_id, size, color), quantity in requested_variants.items():
         product = products_by_id[product_id]
-        if product["stock"] < quantity:
+        variant = next(v for v in product["variants"] if v["size"] == size and v["color"] == color)
+        if variant["stock"] < quantity:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail=f"Not enough stock for {product['name']}",
+                detail=f"Not enough stock for {product['name']} in {size} / {color}",
             )
 
-    decremented: list[tuple[ObjectId, int]] = []
+    # Products that predate variants get their synthesised variants saved
+    # first. Guarded so a concurrent order or admin save that already wrote
+    # real variants is never overwritten.
+    for product_id in {key[0] for key in requested_variants}:
+        object_id = ObjectId(product_id)
+        if object_id in unmigrated_ids:
+            await products_collection.update_one(
+                {"_id": object_id, "variants": {"$exists": False}},
+                {"$set": {"variants": products_by_id[product_id]["variants"]}},
+            )
+
+    decremented: list[tuple[ObjectId, str, str, int]] = []
     try:
-        for product_id, quantity in requested_quantities.items():
+        for (product_id, size, color), quantity in requested_variants.items():
             product = products_by_id[product_id]
             object_id = ObjectId(product_id)
             result = await products_collection.update_one(
-                {"_id": object_id, "stock": {"$gte": quantity}},
-                {"$inc": {"stock": -quantity}},
+                {
+                    "_id": object_id,
+                    "variants": {"$elemMatch": {"size": size, "color": color, "stock": {"$gte": quantity}}},
+                },
+                {"$inc": {"variants.$.stock": -quantity, "stock": -quantity}},
             )
             if result.modified_count == 0:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail=f"Not enough stock for {product['name']}",
+                    detail=f"Not enough stock for {product['name']} in {size} / {color}",
                 )
-            decremented.append((object_id, quantity))
+            decremented.append((object_id, size, color, quantity))
 
         order_items = [
             OrderItemResponse(
@@ -127,8 +159,8 @@ async def create_order(
             for (product_id, size, color), quantity in requested_variants.items()
         ]
     except HTTPException:
-        for object_id, quantity in decremented:
-            await products_collection.update_one({"_id": object_id}, {"$inc": {"stock": quantity}})
+        for object_id, size, color, quantity in decremented:
+            await release_variant_stock(products_collection, object_id, size, color, quantity)
         raise
 
     total = round(sum(line.subtotal for line in order_items), 2)
@@ -153,11 +185,8 @@ async def create_order(
         # (both passed the find_one check above before either had inserted).
         # The stock this call reserved was never actually used - release it
         # and hand back whichever order the winner created.
-        for object_id, quantity in decremented:
-            await products_collection.update_one(
-                {"_id": object_id},
-                {"$inc": {"stock": quantity}},
-            )
+        for object_id, size, color, quantity in decremented:
+            await release_variant_stock(products_collection, object_id, size, color, quantity)
         winning_order = await db["orders"].find_one(
             {"user_id": current_user["user_id"], "idempotency_key": idempotency_key}
         )
@@ -165,11 +194,8 @@ async def create_order(
             return serialize_order(winning_order)
         raise
     except PyMongoError:
-        for object_id, quantity in decremented:
-            await products_collection.update_one(
-                {"_id": object_id},
-                {"$inc": {"stock": quantity}},
-            )
+        for object_id, size, color, quantity in decremented:
+            await release_variant_stock(products_collection, object_id, size, color, quantity)
         raise
     order_doc["_id"] = result.inserted_id
     # Backgrounded, not called inline - send_email() makes a blocking HTTP
@@ -232,9 +258,12 @@ async def update_order_status(
                 product_object_id = ObjectId(item["product_id"])
             except InvalidId:
                 continue
-            await products_collection.update_one(
-                {"_id": product_object_id},
-                {"$inc": {"stock": item["quantity"]}},
+            await release_variant_stock(
+                products_collection,
+                product_object_id,
+                item.get("size") or "",
+                item.get("color") or "",
+                item["quantity"],
             )
 
     await db["orders"].update_one({"_id": object_id}, {"$set": {"status": update.status}})

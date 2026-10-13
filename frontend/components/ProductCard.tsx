@@ -1,7 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { FALLBACK_IMAGE, type Product } from "@/lib/shop-store";
+import { ColorSelector } from "@/components/ColorSelector";
+import { ProductImage } from "@/components/ProductImage";
+import { SizeSelector } from "@/components/SizeSelector";
+import { type Product } from "@/lib/shop-store";
 import type { useAddToCart } from "@/lib/useAddToCart";
 
 type AddToCartApi = ReturnType<typeof useAddToCart>;
@@ -30,14 +33,7 @@ export function ProductCard({
       <div className="product-image">
         {product.badge && <span className="badge">{product.badge}</span>}
         <Link href={`/products/${product.id}`}>
-          <img
-            src={product.image}
-            alt={product.name}
-            onError={(event) => {
-              event.currentTarget.onerror = null;
-              event.currentTarget.src = FALLBACK_IMAGE;
-            }}
-          />
+          <ProductImage src={product.image} alt={product.name} transitionName={`product-image-${product.id}`} />
         </Link>
         <button
           className={wishlist.includes(product.id) ? "heart active" : "heart"}
@@ -62,35 +58,11 @@ export function ProductCard({
         </div>
         <strong>${product.price.toFixed(2)}</strong>
       </div>
-      <div className="size-row">
-        {product.sizes.map((size) => (
-          <button
-            key={size}
-            type="button"
-            className={selection.size === size ? "size-chip active" : "size-chip"}
-            aria-pressed={selection.size === size}
-            onClick={() => selectSize(product, size)}
-          >
-            {size}
-          </button>
-        ))}
-      </div>
+      <SizeSelector product={product} color={selection.color} value={selection.size} onSelect={(size) => selectSize(product, size)} variant="compact" showError={sizeErrors[product.id]} />
       {sizeErrors[product.id] && <p className="size-error">Select a size to add to bag</p>}
       <div className="product-meta">
         <span className="stars">★★★★★ <small>{product.rating}</small></span>
-        <span className="swatches">
-          {product.colors.map((color) => (
-            <button
-              key={color}
-              type="button"
-              className={selection.color === color ? "swatch active" : "swatch"}
-              style={{ backgroundColor: color }}
-              aria-label={`Select color ${color}`}
-              aria-pressed={selection.color === color}
-              onClick={() => selectColor(product, color)}
-            />
-          ))}
-        </span>
+        <ColorSelector product={product} value={selection.color} onSelect={(color) => selectColor(product, color)} />
       </div>
       <div className="quantity-row">
         <button type="button" aria-label={`Decrease quantity for ${product.name}`} onClick={() => setQuantity(product, selection.quantity - 1)}>−</button>

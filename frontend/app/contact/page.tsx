@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { ContactForm } from "@/components/ContactForm";
 import { SiteFooter } from "@/components/SiteFooter";
 
@@ -11,10 +10,6 @@ export const metadata: Metadata = {
 export default function ContactPage() {
   return (
     <main className="store-shell">
-      <nav className="navbar">
-        <Link className="brand" href="/">THREAD<span>&</span>CO</Link>
-        <Link href="/" className="back-link">← Back home</Link>
-      </nav>
 
       <section className="page-shell">
         <p className="eyebrow">GET IN TOUCH</p>

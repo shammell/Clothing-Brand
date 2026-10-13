@@ -5,6 +5,9 @@ import { upload } from "@vercel/blob/client";
 import { authenticatedFetch, extractErrorMessage } from "@/lib/auth-store";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { SortableTh } from "@/components/SortableTh";
+import { PairsWithPicker } from "@/components/PairsWithPicker";
+import { VariantStockGrid } from "@/components/VariantStockGrid";
+import { gridToVariants, parseList, variantsToValues, variantTotals, type ApiVariant } from "@/lib/variantGrid";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -19,25 +22,30 @@ type Product = {
   colors: string[];
   image_url: string;
   stock: number;
+  variants?: ApiVariant[];
+  companions?: string[];
   rating: number;
 };
 
 type ProductFormState = {
   name: string; description: string; price: string; category: string; brand: string;
-  sizes: string; colors: string; image_url: string; stock: string; rating: string;
+  sizes: string; colors: string; image_url: string; variantStock: Record<string, string>; rating: string;
+  // Only sent when the admin changes it, so saving other edits never marks a generated list as manual.
+  companions: string[]; companionsTouched: boolean;
 };
 
 const EMPTY_FORM: ProductFormState = {
   name: "", description: "", price: "", category: "", brand: "",
-  sizes: "", colors: "", image_url: "", stock: "", rating: "0",
+  sizes: "", colors: "", image_url: "", variantStock: {}, rating: "0", companions: [], companionsTouched: false,
 };
 
 function productToForm(product: Product): ProductFormState {
   return {
     name: product.name, description: product.description ?? "", price: String(product.price),
     category: product.category, brand: product.brand, sizes: product.sizes.join(", "),
-    colors: product.colors.join(", "), image_url: product.image_url, stock: String(product.stock),
+    colors: product.colors.join(", "), image_url: product.image_url, variantStock: variantsToValues(product.variants ?? []),
     rating: String(product.rating),
+    companions: product.companions ?? [], companionsTouched: false,
   };
 }
 
@@ -48,11 +56,10 @@ function formToPayload(form: ProductFormState) {
     price: Number(form.price),
     category: form.category.trim(),
     brand: form.brand.trim(),
-    sizes: form.sizes.split(",").map((size) => size.trim()).filter(Boolean),
-    colors: form.colors.split(",").map((color) => color.trim()).filter(Boolean),
+    variants: gridToVariants(parseList(form.sizes), parseList(form.colors), form.variantStock),
     image_url: form.image_url.trim(),
-    stock: Number(form.stock),
     rating: Number(form.rating) || 0,
+    ...(form.companionsTouched ? { companions: form.companions } : {}),
   };
 }
 
@@ -278,10 +285,6 @@ export function ProductManager({
             <input id="pm-price" required type="number" step="0.01" min="0.01" placeholder="0.00" value={form.price} onChange={(event) => setForm({ ...form, price: event.target.value })} className={inputClass} />
           </div>
           <div>
-            <label htmlFor="pm-stock" className={labelClass}>Stock</label>
-            <input id="pm-stock" required type="number" min="0" placeholder="0" value={form.stock} onChange={(event) => setForm({ ...form, stock: event.target.value })} className={inputClass} />
-          </div>
-          <div>
             <label htmlFor="pm-rating" className={labelClass}>Rating (0-5)</label>
             <input id="pm-rating" type="number" step="0.1" min="0" max="5" placeholder="0" value={form.rating} onChange={(event) => setForm({ ...form, rating: event.target.value })} className={inputClass} />
           </div>
@@ -292,6 +295,26 @@ export function ProductManager({
           <div className="md:col-span-2">
             <label htmlFor="pm-colors" className={labelClass}>Colors (comma-separated)</label>
             <input id="pm-colors" required placeholder="Black, White" value={form.colors} onChange={(event) => setForm({ ...form, colors: event.target.value })} className={inputClass} />
+          </div>
+          <div className="md:col-span-2">
+            <p className={labelClass}>Stock by size and color</p>
+            <VariantStockGrid
+              sizes={parseList(form.sizes)}
+              colors={parseList(form.colors)}
+              values={form.variantStock}
+              onChange={(key, value) => setForm((current) => ({ ...current, variantStock: { ...current.variantStock, [key]: value } }))}
+              inputClass={inputClass}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <p className={labelClass}>Pairs with (up to 4)</p>
+            <PairsWithPicker
+              options={products.map((item) => ({ id: item.id, name: item.name }))}
+              selected={form.companions}
+              excludeId={editingId}
+              onChange={(ids) => setForm((current) => ({ ...current, companions: ids, companionsTouched: true }))}
+              inputClass={inputClass}
+            />
           </div>
           <div className="md:col-span-2">
             <label htmlFor="pm-image" className={labelClass}>Image URL (or upload below)</label>
@@ -358,6 +381,9 @@ export function ProductManager({
                     <td className="py-2.5 pr-4 text-slate-600">{product.category}</td>
                     <td className="py-2.5 pr-4 text-slate-600">${product.price.toFixed(2)}</td>
                     <td className="py-2.5 pr-4">
+                      {product.variants && product.stock > 0 && variantTotals(product.variants).soldOut > 0 && (
+                        <span className="mr-2 text-xs text-amber-700">{variantTotals(product.variants).soldOut} variants out</span>
+                      )}
                       {product.stock === 0 ? (
                         <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">Out of stock</span>
                       ) : product.stock < 5 ? (

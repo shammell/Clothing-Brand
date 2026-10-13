@@ -4,18 +4,18 @@ import sentry_sdk
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sentry_sdk.integrations.fastapi import FastApiIntegration
-from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 
 from app.core.config import build_allowed_origins, settings
 from app.core.database import close_db, connect_db
-from app.core.limiter import limiter
+from app.core.limiter import limiter, rate_limit_exceeded_handler
 from app.routes.auth import router as auth_router
 from app.routes.chat import router as chat_router
 from app.routes.contact import router as contact_router
 from app.routes.orders import router as orders_router
 from app.routes.products import router as products_router
+from app.routes.search import router as search_router
 from app.routes.users import router as users_router
 
 
@@ -31,7 +31,7 @@ if settings.SENTRY_DSN:
 
 app = FastAPI(title="Thread&Co API", version="1.0.0", lifespan=lifespan)
 app.state.limiter = limiter
-app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
 app.add_middleware(
     CORSMiddleware,
@@ -42,6 +42,7 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(products_router)
+app.include_router(search_router)
 app.include_router(orders_router)
 app.include_router(chat_router)
 app.include_router(users_router)

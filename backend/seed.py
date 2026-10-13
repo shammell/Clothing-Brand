@@ -1,9 +1,12 @@
 import asyncio
 import os
 
+from bson import ObjectId
 from dotenv import load_dotenv
 from motor.motor_asyncio import AsyncIOMotorClient
 
+
+from app.services.variants import build_variant_fields, split_stock
 
 load_dotenv()
 
@@ -97,7 +100,14 @@ async def seed_products() -> None:
         products = database["products"]
 
         await products.delete_many({})
-        result = await products.insert_many(PRODUCTS)
+        documents = []
+        for product in PRODUCTS:
+            object_id = ObjectId()
+            fields = build_variant_fields(
+                str(object_id), split_stock(product["sizes"], product["colors"], product["stock"])
+            )
+            documents.append({"_id": object_id} | product | fields)
+        result = await products.insert_many(documents)
         print(f"Inserted {len(result.inserted_ids)} products into MongoDB.")
     finally:
         client.close()

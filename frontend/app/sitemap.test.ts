@@ -6,6 +6,7 @@ describe("sitemap", () => {
   it("includes every static page", () => {
     const urls = sitemap().map((entry) => entry.url);
     expect(urls.some((url) => url.endsWith("/shop"))).toBe(true);
+    expect(urls.some((url) => url.endsWith("/lookbook"))).toBe(true);
     expect(urls.some((url) => url.endsWith("/about"))).toBe(true);
     expect(urls.some((url) => url.endsWith("/contact"))).toBe(true);
     expect(urls.some((url) => url.endsWith("/policies"))).toBe(true);
