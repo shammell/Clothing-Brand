@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { PairsWellWith } from "@/components/CompleteTheLook";
 import { ProductImage } from "@/components/ProductImage";
 import { useCart } from "@/lib/useCart";
@@ -15,6 +15,15 @@ export function CartDrawer() {
   const { cartOpen } = useSyncExternalStore(subscribeToUi, getUiSnapshot, getUiServerSnapshot);
   const { cart, cartTotal, cartCount, removeFromCart, updateCartQuantity, goToCheckout } = useCart();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  // A removed line fades out first so the list closes the gap after, not before.
+  const [leaving, setLeaving] = useState<string | null>(null);
+  const removeWithFade = (index: number, key: string) => {
+    setLeaving(key);
+    setTimeout(() => {
+      removeFromCart(index);
+      setLeaving(null);
+    }, 150);
+  };
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -55,7 +64,10 @@ export function CartDrawer() {
         <>
           <div className="drawer-lines">
             {cart.map((item, index) => (
-              <div className="cart-item drawer-line" key={`${item.id}-${item.size}-${item.color}`}>
+              <div
+                className={`cart-item drawer-line${leaving === `${item.id}-${item.size}-${item.color}` ? " leaving" : ""}`}
+                key={`${item.id}-${item.size}-${item.color}`}
+              >
                 <ProductImage src={item.image} alt={item.name} />
                 <div>
                   <b>{item.name}</b>
@@ -67,7 +79,7 @@ export function CartDrawer() {
                   </div>
                   <strong>${(item.price * item.quantity).toFixed(2)}</strong>
                 </div>
-                <button type="button" className="cart-item-remove" aria-label={`Remove ${item.name} from bag`} onClick={() => removeFromCart(index)}>×</button>
+                <button type="button" className="cart-item-remove" aria-label={`Remove ${item.name} from bag`} onClick={() => removeWithFade(index, `${item.id}-${item.size}-${item.color}`)}>×</button>
               </div>
             ))}
           </div>

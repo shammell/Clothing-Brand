@@ -61,6 +61,13 @@ export default function ShopPage() {
     [activeCategory, deferredQuery, catalog],
   );
 
+  // The header's camera icon lands here with ?photo=1: bring the photo button into focus.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("photo") === "1") {
+      document.querySelector<HTMLButtonElement>(".photo-button")?.focus();
+    }
+  }, []);
+
   const handleVisual = (next: VisualState) => {
     if (visual.status === "idle") savedFilters.current = { category: activeCategory, query };
     setVisual(next);

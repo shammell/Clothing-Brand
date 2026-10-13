@@ -79,6 +79,12 @@ export function SiteHeader() {
           >
             {currentUser ? currentUser[0].toUpperCase() : "♙"}
           </Link>
+          <Link href="/shop?photo=1" className="icon-button interactive" aria-label="Search by photo" title="Search by photo">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M4 8h3l2-3h6l2 3h3v11H4z" />
+              <circle cx="12" cy="13" r="3.5" />
+            </svg>
+          </Link>
           {cartDrawerSuppressedFor(pathname) ? (
             <Link href="/cart" className={`icon-button cart-button interactive${cartBumped ? " bump" : ""}`} aria-label="Open cart">
               ♧ <b>{cartCount}</b>

@@ -368,3 +368,5 @@ dialog.fit-dialog::backdrop { background:#25221f66; }
 
 .cart-item .cart-item-qty { flex-direction:row; align-items:center; }
 .category-strip { gap:14px; }
+
+.drawer-line.leaving { opacity:0; transform:translateX(12px); transition:opacity var(--dur-fast) var(--ease-in-out), transform var(--dur-fast) var(--ease-in-out); }

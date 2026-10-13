@@ -46,7 +46,12 @@ describe("CartDrawer", () => {
     act(() => openCartDrawer());
     fireEvent.click(screen.getByLabelText("Increase quantity for Tee"));
     expect(getCartSnapshot()[0].quantity).toBe(2);
+    vi.useFakeTimers();
     fireEvent.click(screen.getByLabelText("Remove Tee from bag"));
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+    vi.useRealTimers();
     expect(getCartSnapshot()).toHaveLength(0);
     expect(screen.getByText("Your bag is waiting")).toBeTruthy();
   });
