@@ -13,6 +13,7 @@ export type Product = {
   description?: string;
   brand?: string;
   stock?: number;
+  variants?: { size: string; color: string; stock: number }[];
 };
 
 export type CartLine = Product & { size: string; color: string; quantity: number };
@@ -39,6 +40,13 @@ export function productFromApi(item: Record<string, unknown>): Product {
     description: typeof item.description === "string" ? item.description : undefined,
     brand: typeof item.brand === "string" ? item.brand : undefined,
     stock: typeof item.stock === "number" ? item.stock : undefined,
+    variants: Array.isArray(item.variants)
+      ? item.variants.map((v: Record<string, unknown>) => ({
+          size: String(v.size),
+          color: String(v.color),
+          stock: Number(v.stock) || 0,
+        }))
+      : undefined,
   };
 }
 
