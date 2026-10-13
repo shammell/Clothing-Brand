@@ -13,6 +13,8 @@ import {
   toggleWishlist,
 } from "@/lib/shop-store";
 import { useAddToCart } from "@/lib/useAddToCart";
+import { ProductGridSkeleton } from "@/components/Skeletons";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 const CATEGORIES = ["All", "T-Shirts", "Jeans", "Dresses", "Hoodies", "Shoes", "Shirts"];
@@ -71,8 +73,9 @@ export default function ShopPage() {
       <section className="products-section">
         <div className="section-heading">
           <div><p className="eyebrow">FULL COLLECTION</p><h2>Shop everything</h2></div>
-          <span>{loading ? "Loading..." : loadError ? loadError : `${filteredProducts.length} styles`}</span>
+          <span>{loading ? "" : loadError ? loadError : `${filteredProducts.length} styles`}</span>
         </div>
+        {loading && <ProductGridSkeleton count={6} />}
         {!loading && loadError && <p className="detail-status">{loadError}</p>}
         {!loading && !loadError && (
           <div className="product-grid">

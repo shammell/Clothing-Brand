@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { authenticatedFetch, getAuthServerSnapshot, getAuthTokenSnapshot, getCurrentUserSnapshot, subscribeToStorage, writeAuth } from "@/lib/auth-store";
+import { OrderListSkeleton } from "@/components/Skeletons";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -61,7 +63,7 @@ export default function AccountPage() {
       <p style={{ marginBottom: 24 }}>Signed in as <b>{currentUser}</b></p>
 
       <h2 style={{ fontSize: 20, marginBottom: 16 }}>Order history</h2>
-      {loading && <p className="orders-status">Loading your orders...</p>}
+      {loading && <OrderListSkeleton />}
       {!loading && error && <p className="auth-error">{error}</p>}
       {!loading && !error && orders.length === 0 && (
         <div className="empty-state"><span>♧</span><p>No orders yet</p><small>Your past purchases will show up here.</small></div>

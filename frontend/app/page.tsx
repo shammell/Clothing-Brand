@@ -14,6 +14,8 @@ import { useAddToCart } from "@/lib/useAddToCart";
 import { ProductCard } from "@/components/ProductCard";
 import { SiteFooter } from "@/components/SiteFooter";
 import { useInViewport } from "@/lib/useInViewport";
+import { ProductGridSkeleton } from "@/components/Skeletons";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -173,9 +175,9 @@ export default function Home() {
       <section className="products-section" id="shop">
         <div className="section-heading">
           <div><p className="eyebrow">CURATED FOR YOU</p><h2>Fresh picks</h2></div>
-          <span>{productsLoading ? "Loading..." : productsError ? "" : `${filteredProducts.length} styles`}</span>
+          <span>{productsLoading ? "" : productsError ? "" : `${filteredProducts.length} styles`}</span>
         </div>
-        {productsLoading && <p className="detail-status">Loading products...</p>}
+        {productsLoading && <ProductGridSkeleton count={6} />}
         {!productsLoading && productsError && (
           <div className="detail-status">
             <p>Couldn&apos;t load products right now.</p>

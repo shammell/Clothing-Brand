@@ -4,6 +4,8 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { authenticatedFetch, getAuthServerSnapshot, getAuthTokenSnapshot, getRoleServerSnapshot, getRoleSnapshot, isAdminRole, subscribeToStorage } from "@/lib/auth-store";
+import { OrderSkeleton } from "@/components/Skeletons";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 const ORDER_STEPS = ["placed", "processing", "shipped", "delivered"] as const;
@@ -86,7 +88,7 @@ export default function OrderDetailPage() {
       <Link href="/account" className="back-link">← Back to your orders</Link>
       <h1>Order detail</h1>
 
-      {(!clientReady || loading) && <p className="detail-status">Loading...</p>}
+      {(!clientReady || loading) && <OrderSkeleton />}
       {clientReady && !loading && notFound && <p className="detail-status">We couldn&apos;t find that order.</p>}
 
       {clientReady && !loading && !notFound && order && (

@@ -13,6 +13,8 @@ import {
   toggleWishlist,
 } from "@/lib/shop-store";
 import { useAddToCart } from "@/lib/useAddToCart";
+import { ProductDetailSkeleton } from "@/components/Skeletons";
+
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -46,7 +48,7 @@ export default function ProductDetailPage() {
   return (
     <main className="store-shell">
 
-      {loading && <p className="detail-status">Loading...</p>}
+      {loading && <ProductDetailSkeleton />}
       {!loading && loadError && <p className="detail-status">{loadError}</p>}
 
       {!loading && !loadError && product && selection && (

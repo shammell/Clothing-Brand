@@ -247,3 +247,9 @@ html:has(dialog[open]) { overflow:hidden; scrollbar-gutter:stable; }
 .sr-only { position:absolute; width:1px; height:1px; padding:0; margin:-1px; overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0; }
 .fade-in { animation:fade-in var(--dur-base) var(--ease-out); }
 @keyframes fade-in { from { opacity:0; } }
+
+/* Skeletons: same dimensions as the real layouts, shimmer is background-position only. */
+.skeleton { background:linear-gradient(90deg,#e7e2dc 0%,#efebe5 50%,#e7e2dc 100%); background-size:200% 100%; animation:shimmer 1.4s linear infinite; }
+.skeleton-line { height:14px; margin:6px 0; border-radius:2px; }
+@keyframes shimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation:none; background:#e7e2dc; } }
