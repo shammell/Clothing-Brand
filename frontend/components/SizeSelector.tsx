@@ -11,9 +11,11 @@ type Props = {
   onSelect: (size: string) => void;
   variant?: "compact" | "full";
   showError?: boolean;
+  // Size to flag with a "Recommended" marker (from Find my size).
+  recommendedSize?: string | null;
 };
 
-export function SizeSelector({ product, color, value, onSelect, variant = "full", showError = false }: Props) {
+export function SizeSelector({ product, color, value, onSelect, variant = "full", showError = false, recommendedSize = null }: Props) {
   const availability = sizeAvailability(product, color);
   const buttons = useRef<(HTMLButtonElement | null)[]>([]);
   const [focusIndex, setFocusIndex] = useState<number | null>(null);
@@ -73,7 +75,7 @@ export function SizeSelector({ product, color, value, onSelect, variant = "full"
               role="radio"
               aria-checked={value === size}
               aria-disabled={soldOut || undefined}
-              aria-label={soldOut ? `${size}, sold out` : state === "low" ? `${size}, low stock` : size}
+              aria-label={`${size}${soldOut ? ", sold out" : state === "low" ? ", low stock" : ""}${recommendedSize === size ? ", recommended" : ""}`}
               title={soldOut ? `${size} is sold out in ${color}` : undefined}
               tabIndex={index === tabIndex ? 0 : -1}
               className={classes.join(" ")}
@@ -82,6 +84,7 @@ export function SizeSelector({ product, color, value, onSelect, variant = "full"
               onKeyDown={(event) => move(event, index)}
             >
               {size}
+              {recommendedSize === size && variant === "full" && <em className="rec-mark">Recommended</em>}
               {state === "low" && variant === "compact" && <i className="low-dot" aria-hidden="true" />}
             </button>
           );

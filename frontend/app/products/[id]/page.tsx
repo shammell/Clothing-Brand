@@ -5,6 +5,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { subscribeToStorage } from "@/lib/auth-store";
 import { ColorSelector } from "@/components/ColorSelector";
 import { ProductImage } from "@/components/ProductImage";
+import { FindMySize } from "@/components/FindMySize";
 import { SizeSelector } from "@/components/SizeSelector";
 import { SiteFooter } from "@/components/SiteFooter";
 import {
@@ -27,6 +28,7 @@ export default function ProductDetailPage() {
   const [product, setProduct] = useState<Product | null>(() => getCachedProduct(productId));
   const [loading, setLoading] = useState(() => !getCachedProduct(productId));
   const [loadError, setLoadError] = useState("");
+  const [recommendedSize, setRecommendedSize] = useState<string | null>(null);
   const wishlist = useSyncExternalStore(subscribeToStorage, getWishlistSnapshot, getWishlistServerSnapshot);
   const { getSelection, selectSize, selectColor, setQuantity, addToCart, addStatus, sizeErrors } = useAddToCart();
 
@@ -76,7 +78,8 @@ export default function ProductDetailPage() {
             <span className="stars">★★★★★ <small>{product.rating}</small></span>
             {product.description && <p className="product-detail-description">{product.description}</p>}
 
-            <SizeSelector product={product} color={selection.color} value={selection.size} onSelect={(size) => selectSize(product, size)} variant="full" showError={sizeErrors[product.id]} />
+            <SizeSelector product={product} color={selection.color} value={selection.size} onSelect={(size) => selectSize(product, size)} variant="full" showError={sizeErrors[product.id]} recommendedSize={recommendedSize} />
+            <FindMySize key={product.id} product={product} onSelectSize={(size) => selectSize(product, size)} onRecommendation={setRecommendedSize} />
             {sizeErrors[product.id] && <p className="size-error">Select a size to add to bag</p>}
 
             <ColorSelector product={product} value={selection.color} onSelect={(color) => selectColor(product, color)} variant="full" />
