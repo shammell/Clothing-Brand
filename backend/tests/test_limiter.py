@@ -42,3 +42,19 @@ def test_trusted_hops_set_but_header_missing_falls_back_to_direct_peer(monkeypat
     monkeypatch.setattr(limiter_module.settings, "TRUSTED_PROXY_HOPS", 1)
     request = _request(xff=None, direct_ip="9.9.9.9")
     assert limiter_module.get_client_identity(request) == "9.9.9.9"
+
+
+def test_global_budget_falls_back_to_the_strict_ceiling_when_storage_fails(monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+    from app.core.limiter import consume_global, limiter
+
+    def broken(*args, **kwargs):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(limiter._limiter, "hit", broken)
+    for _ in range(5):
+        consume_global("outage_test", "1000/minute")
+    with pytest.raises(HTTPException) as blocked:
+        consume_global("outage_test", "1000/minute")
+    assert blocked.value.status_code == 429

@@ -36,6 +36,8 @@ if not settings.REDIS_URL:
         "this app ever runs as more than one worker/replica."
     )
 
+OUTAGE_FALLBACK_LIMIT = "5/minute"
+
 limiter = Limiter(
     key_func=get_client_identity,
     storage_uri=settings.REDIS_URL or "memory://",
@@ -77,7 +79,7 @@ limiter = Limiter(
     # fallback is still per-key via get_client_identity, same as a plain
     # per-route limit). Degraded-but-bounded, not degraded-and-loosened.
     in_memory_fallback_enabled=bool(settings.REDIS_URL),
-    in_memory_fallback=["5/minute"],
+    in_memory_fallback=[OUTAGE_FALLBACK_LIMIT],
 )
 
 
@@ -95,7 +97,10 @@ def consume_global(scope: str, limit_value: str) -> None:
         allowed = limiter._limiter.hit(item, scope, "global")
     except Exception:  # unreachable Redis: degrade to this process, never fail open
         logger.warning("Rate-limit storage unavailable; using in-process fallback for %s", scope)
-        allowed = limiter._fallback_limiter.hit(item, scope, "global")
+        # Same strict in-process ceiling the decorators fall back to (see
+        # in_memory_fallback below), not the configured limit: per-process
+        # counters multiplied across instances must never end up looser than normal.
+        allowed = limiter._fallback_limiter.hit(parse(OUTAGE_FALLBACK_LIMIT), scope, "global")
     if not allowed:
         raise HTTPException(
             status_code=429,
