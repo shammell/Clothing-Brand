@@ -248,3 +248,22 @@ def test_legacy_update_with_new_total_resplits(client, admin_headers, seed_produ
 def test_oversized_size_color_matrix_rejected(client, admin_headers):
     payload = {**LEGACY_PAYLOAD, "sizes": [f"s{i}" for i in range(16)], "colors": ["Black"]}
     assert client.post("/products/", json=payload, headers=admin_headers).status_code == 422
+
+
+def test_looks_lists_only_products_with_two_or_more_resolvable_companions(client, seed_product):
+    a = seed_product(name="Jeans A", stock=4)
+    b = seed_product(name="Shoes B", stock=4)
+    gone = seed_product(name="Gone", stock=0)
+    full = seed_product(name="Tee Full", companions=[a, b, gone])
+    seed_product(name="Tee Thin", companions=[a, gone])  # only one resolvable companion
+    seed_product(name="Tee None")
+    body = client.get("/products/looks")
+    assert body.status_code == 200  # "looks" must not be captured as a product id
+    looks = body.json()
+    assert [look["product"]["id"] for look in looks] == [full]
+    assert [c["name"] for c in looks[0]["companions"]] == ["Jeans A", "Shoes B"]
+
+
+def test_looks_empty_when_no_pairings(client, seed_product):
+    seed_product()
+    assert client.get("/products/looks").json() == []

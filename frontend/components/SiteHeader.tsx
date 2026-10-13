@@ -66,6 +66,7 @@ export function SiteHeader() {
         <Link className="brand" href="/">THREAD<span>&</span>CO</Link>
         <div className="nav-links">
           <Link href="/shop">Shop</Link>
+          <Link href="/lookbook">Lookbook</Link>
           <Link href="/about">Our story</Link>
           <Link href="/contact">Contact</Link>
         </div>

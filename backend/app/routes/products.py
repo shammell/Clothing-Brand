@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.database import get_database
 from app.core.limiter import limiter
-from app.models.product import ProductCreate, ProductResponse, SizeRecommendationRequest
+from app.models.product import LookResponse, ProductCreate, ProductResponse, SizeRecommendationRequest
 from app.services.companions import MAX_COMPANIONS
 from app.services.sizing import recommend_size, size_guide
 from app.services.variants import build_update_document, build_product_document, ensure_variants
@@ -44,6 +44,19 @@ async def get_products(category: Optional[str] = None):
         .to_list(length=100)
     )
     return [serialize_product(product) for product in products]
+
+
+# Declared before "/{product_id}" so "looks" is not captured as a product id.
+@router.get("/looks", response_model=list[LookResponse])
+async def get_looks():
+    """Outfits: in-stock products with two or more in-stock companions, companions expanded."""
+    products = await get_database()["products"].find({"stock": {"$gt": 0}, "companions.1": {"$exists": True}}).sort("name", 1).to_list(length=100)
+    looks = []
+    for product in products:
+        companions = await resolve_companions(product)
+        if len(companions) >= 2:
+            looks.append({"product": serialize_product(product), "companions": [serialize_product(c) for c in companions]})
+    return looks
 
 
 @router.get("/{product_id}", response_model=ProductResponse)

@@ -76,3 +76,8 @@ class SizeRecommendationRequest(BaseModel):
     height_cm: float = Field(ge=100, le=250)
     weight_kg: float = Field(ge=30, le=250)
     fit: Literal["snug", "regular", "relaxed"] = "regular"
+
+
+class LookResponse(BaseModel):
+    product: ProductResponse
+    companions: list[ProductResponse]

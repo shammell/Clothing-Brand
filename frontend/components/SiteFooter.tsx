@@ -8,6 +8,7 @@ export function SiteFooter() {
       <p>© 2026 Thread&amp;Co. Designed for every day.</p>
       <div>
         <Link href="/shop">Shop</Link>
+        <Link href="/lookbook">Lookbook</Link>
         <Link href="/about">About</Link>
         <Link href="/policies">Policies</Link>
         <Link href="/contact">Contact</Link>
