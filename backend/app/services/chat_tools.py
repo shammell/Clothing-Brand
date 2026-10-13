@@ -13,6 +13,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 
 from app.core.database import get_database
+from app.services.companions import rank_companions
 from app.services.sizing import recommend_size
 from app.services.variants import ensure_variants
 
@@ -20,6 +21,7 @@ MAX_RESULTS = 6
 LOW_STOCK_THRESHOLD = 5
 SEARCH_CACHE_SECONDS = 60
 MAX_CACHE_ENTRIES = 100
+MAX_COMPANION_RESULTS = 4
 
 _search_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
@@ -202,6 +204,53 @@ async def _recommend_size(args: dict[str, Any], context: ToolContext) -> dict[st
     return result
 
 
+async def _get_companions(args: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    raw_id = args.get("product_id")
+    try:
+        object_id = ObjectId(raw_id) if isinstance(raw_id, str) else None
+    except InvalidId:
+        object_id = None
+    if object_id is None:
+        return {"error": "product_id is not a valid product id"}
+    products = get_database()["products"]
+    document = await products.find_one({"_id": object_id})
+    if not document:
+        return {"error": "Product not found"}
+    # Stored pairings first, then the rules fill any gaps (still in stock only).
+    stored_ids = [ObjectId(c) for c in document.get("companions", []) if ObjectId.is_valid(c)]
+    stored = await products.find({"_id": {"$in": stored_ids}, "stock": {"$gt": 0}}).to_list(length=len(stored_ids) or 1) if stored_ids else []
+    chosen = list(stored)
+    if len(chosen) < MAX_COMPANION_RESULTS:
+        pool = await products.find({"stock": {"$gt": 0}}).to_list(length=200)
+        for candidate in rank_companions(document, pool):
+            if all(candidate["_id"] != existing["_id"] for existing in chosen):
+                chosen.append(candidate)
+    chosen = chosen[:MAX_COMPANION_RESULTS]
+    for companion in chosen:
+        context.add_product(companion)
+    return {
+        "companions": [
+            {"id": str(c["_id"]), "name": c["name"], "price": c["price"], "category": c["category"], "colors": c["colors"]}
+            for c in chosen
+        ]
+    }
+
+
+TOOL_DEFINITIONS.append(
+    {
+        "type": "function",
+        "function": {
+            "name": "get_companions",
+            "description": "Up to 4 in-stock products that go well with the given product.",
+            "parameters": {
+                "type": "object",
+                "properties": {"product_id": {"type": "string"}},
+                "required": ["product_id"],
+            },
+        },
+    }
+)
+
 TOOL_DEFINITIONS.append(
     {
         "type": "function",
@@ -226,6 +275,7 @@ _HANDLERS = {
     "search_products": _search_products,
     "get_variant_availability": _get_variant_availability,
     "recommend_size": _recommend_size,
+    "get_companions": _get_companions,
 }
 
 

@@ -5,6 +5,7 @@ import { upload } from "@vercel/blob/client";
 import { authenticatedFetch, extractErrorMessage } from "@/lib/auth-store";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { SortableTh } from "@/components/SortableTh";
+import { PairsWithPicker } from "@/components/PairsWithPicker";
 import { VariantStockGrid } from "@/components/VariantStockGrid";
 import { gridToVariants, parseList, variantsToValues, variantTotals, type ApiVariant } from "@/lib/variantGrid";
 
@@ -22,17 +23,20 @@ type Product = {
   image_url: string;
   stock: number;
   variants?: ApiVariant[];
+  companions?: string[];
   rating: number;
 };
 
 type ProductFormState = {
   name: string; description: string; price: string; category: string; brand: string;
   sizes: string; colors: string; image_url: string; variantStock: Record<string, string>; rating: string;
+  // Only sent when the admin changes it, so saving other edits never marks a generated list as manual.
+  companions: string[]; companionsTouched: boolean;
 };
 
 const EMPTY_FORM: ProductFormState = {
   name: "", description: "", price: "", category: "", brand: "",
-  sizes: "", colors: "", image_url: "", variantStock: {}, rating: "0",
+  sizes: "", colors: "", image_url: "", variantStock: {}, rating: "0", companions: [], companionsTouched: false,
 };
 
 function productToForm(product: Product): ProductFormState {
@@ -41,6 +45,7 @@ function productToForm(product: Product): ProductFormState {
     category: product.category, brand: product.brand, sizes: product.sizes.join(", "),
     colors: product.colors.join(", "), image_url: product.image_url, variantStock: variantsToValues(product.variants ?? []),
     rating: String(product.rating),
+    companions: product.companions ?? [], companionsTouched: false,
   };
 }
 
@@ -54,6 +59,7 @@ function formToPayload(form: ProductFormState) {
     variants: gridToVariants(parseList(form.sizes), parseList(form.colors), form.variantStock),
     image_url: form.image_url.trim(),
     rating: Number(form.rating) || 0,
+    ...(form.companionsTouched ? { companions: form.companions } : {}),
   };
 }
 
@@ -297,6 +303,16 @@ export function ProductManager({
               colors={parseList(form.colors)}
               values={form.variantStock}
               onChange={(key, value) => setForm((current) => ({ ...current, variantStock: { ...current.variantStock, [key]: value } }))}
+              inputClass={inputClass}
+            />
+          </div>
+          <div className="md:col-span-2">
+            <p className={labelClass}>Pairs with (up to 4)</p>
+            <PairsWithPicker
+              options={products.map((item) => ({ id: item.id, name: item.name }))}
+              selected={form.companions}
+              excludeId={editingId}
+              onChange={(ids) => setForm((current) => ({ ...current, companions: ids, companionsTouched: true }))}
               inputClass={inputClass}
             />
           </div>

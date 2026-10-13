@@ -44,8 +44,11 @@ def build_product_document(product_id: str, payload: dict[str, Any]) -> dict[str
     document = {
         key: value
         for key, value in payload.items()
-        if key not in ("variants", "sizes", "colors", "stock")
+        if key not in ("variants", "sizes", "colors", "stock", "companions")
     }
+    if payload.get("companions") is not None:
+        document["companions"] = payload["companions"]
+        document["companions_source"] = "manual"
     variants = payload.get("variants")
     if not variants:
         variants = split_stock(payload["sizes"], payload["colors"], payload["stock"])

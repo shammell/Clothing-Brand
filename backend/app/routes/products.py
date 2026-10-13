@@ -7,6 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from app.core.database import get_database
 from app.core.limiter import limiter
 from app.models.product import ProductCreate, ProductResponse, SizeRecommendationRequest
+from app.services.companions import MAX_COMPANIONS
 from app.services.sizing import recommend_size, size_guide
 from app.services.variants import build_update_document, build_product_document, ensure_variants
 from app.services.auth_service import CurrentUser, require_role
@@ -64,6 +65,34 @@ async def load_product(product_id: str) -> dict[str, Any]:
     return ensure_variants(product)
 
 
+async def validate_companions(companion_ids: list[str] | None, own_id: ObjectId | None) -> None:
+    """Companions must be other products that exist."""
+    if not companion_ids:
+        return
+    ids = [ObjectId(companion_id) for companion_id in companion_ids]
+    if own_id is not None and own_id in ids:
+        raise HTTPException(status_code=422, detail="A product cannot be paired with itself")
+    found = await get_database()["products"].count_documents({"_id": {"$in": ids}})
+    if found != len(ids):
+        raise HTTPException(status_code=422, detail="One of the paired products does not exist")
+
+
+async def resolve_companions(product: dict[str, Any]) -> list[dict[str, Any]]:
+    """Companion products that still exist and are in stock, in the stored order."""
+    ids = [ObjectId(companion_id) for companion_id in product.get("companions", []) if ObjectId.is_valid(companion_id)]
+    if not ids:
+        return []
+    found = await get_database()["products"].find({"_id": {"$in": ids}, "stock": {"$gt": 0}}).to_list(length=len(ids))
+    by_id = {document["_id"]: document for document in found}
+    return [by_id[object_id] for object_id in ids if object_id in by_id and object_id != product["_id"]][:MAX_COMPANIONS]
+
+
+@router.get("/{product_id}/companions", response_model=list[ProductResponse])
+async def get_companions(product_id: str):
+    product = await load_product(product_id)
+    return [serialize_product(companion) for companion in await resolve_companions(product)]
+
+
 @router.get("/{product_id}/size-guide")
 async def get_size_guide(product_id: str):
     return size_guide(await load_product(product_id))
@@ -79,6 +108,7 @@ async def post_size_recommendation(request: Request, product_id: str, body: Size
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(product: ProductCreate, _: CurrentUser = Depends(require_role("admin", "lister"))):
     db = get_database()
+    await validate_companions(product.companions, None)
     object_id = ObjectId()
     document = build_product_document(str(object_id), product.model_dump())
     await db["products"].insert_one({"_id": object_id} | document)
@@ -95,6 +125,7 @@ async def create_product(product: ProductCreate, _: CurrentUser = Depends(requir
 async def update_product(product_id: str, product: ProductCreate, _: CurrentUser = Depends(require_role("admin", "lister"))):
     object_id = parse_product_id(product_id)
     db = get_database()
+    await validate_companions(product.companions, object_id)
     existing = await db["products"].find_one({"_id": object_id})
     if not existing:
         raise HTTPException(

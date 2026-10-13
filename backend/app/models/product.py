@@ -1,11 +1,13 @@
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field, model_validator
+from bson import ObjectId
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # sizes x colors is expanded into one variant each, so both lists are capped
 # to keep a single request from generating an enormous document.
 MAX_OPTIONS = 15
 MAX_VARIANTS = 200
+MAX_COMPANIONS = 4
 
 
 class Variant(BaseModel):
@@ -31,6 +33,21 @@ class ProductCreate(ProductBase):
     sizes: Optional[list[str]] = Field(default=None, min_length=1, max_length=MAX_OPTIONS)
     colors: Optional[list[str]] = Field(default=None, min_length=1, max_length=MAX_OPTIONS)
     stock: Optional[int] = Field(default=None, ge=0)
+    # None means "leave the stored list alone" (the older admin form never sends it).
+    # Sending a list, even an empty one, marks it as set by hand.
+    companions: Optional[list[str]] = Field(default=None, max_length=MAX_COMPANIONS)
+
+    @field_validator("companions")
+    @classmethod
+    def check_companions(cls, value):
+        if value is None:
+            return value
+        if len(value) != len(set(value)):
+            raise ValueError("A product can be paired with another product only once")
+        for companion_id in value:
+            if not ObjectId.is_valid(companion_id):
+                raise ValueError("Invalid companion product id")
+        return value
 
     @model_validator(mode="after")
     def check_variants_or_legacy_fields(self):
@@ -49,6 +66,8 @@ class ProductResponse(ProductBase):
     sizes: list[str]
     colors: list[str]
     stock: int
+    companions: list[str] = Field(default_factory=list)
+    companions_source: Optional[Literal["manual", "generated"]] = None
 
     model_config = {"from_attributes": True}
 
