@@ -43,3 +43,17 @@ describe("SiteHeader", () => {
     expect(screen.queryByText(/Free shipping/)).toBeNull();
   });
 });
+
+describe("SiteHeader announcements", () => {
+  it("announces an add once in a polite live region", async () => {
+    const { act } = await import("@testing-library/react");
+    const { announce, addedAnnouncement } = await import("@/lib/ui-store");
+    pathnameMock.value = "/shop";
+    render(<SiteHeader />);
+    act(() => announce(addedAnnouncement("Tee", "M", 3)));
+    const region = screen.getByRole("status");
+    expect(region.getAttribute("aria-live")).toBe("polite");
+    expect(region.textContent).toBe("Added Tee, size M. Bag has 3 items.");
+    expect(addedAnnouncement("Tee", "M", 1)).toBe("Added Tee, size M. Bag has 1 item.");
+  });
+});

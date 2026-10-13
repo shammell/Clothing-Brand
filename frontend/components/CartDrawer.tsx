@@ -78,7 +78,7 @@ export function CartDrawer() {
             ))}
           </div>
           <div className="drawer-footer">
-            <div className="drawer-subtotal"><span>Subtotal</span><b>${cartTotal.toFixed(2)}</b></div>
+            <div className="drawer-subtotal"><span>Subtotal</span><b key={cartTotal} className="fade-in">${cartTotal.toFixed(2)}</b></div>
             <button
               type="button"
               className="checkout interactive"

@@ -9,7 +9,7 @@ import {
   subscribeToStorage,
 } from "@/lib/auth-store";
 import { getCartServerSnapshot, getCartSnapshot } from "@/lib/shop-store";
-import { cartDrawerSuppressedFor, openCartDrawer } from "@/lib/ui-store";
+import { cartDrawerSuppressedFor, getUiServerSnapshot, getUiSnapshot, openCartDrawer, subscribeToUi } from "@/lib/ui-store";
 
 const OWN_SHELL_PREFIXES = ["/admin", "/lister"];
 
@@ -17,6 +17,7 @@ export function SiteHeader() {
   const pathname = usePathname();
   const cart = useSyncExternalStore(subscribeToStorage, getCartSnapshot, getCartServerSnapshot);
   const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
+  const { announcement } = useSyncExternalStore(subscribeToUi, getUiSnapshot, getUiServerSnapshot);
   const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
   // One-shot cart-icon bump when an item is added, not on every render or on
@@ -60,6 +61,7 @@ export function SiteHeader() {
       {pathname === "/" && (
         <div className="announcement">Free shipping on orders over $75 <span>•</span> Easy 30-day returns</div>
       )}
+      <div className="sr-only" role="status" aria-live="polite">{announcement}</div>
       <nav className="navbar">
         <Link className="brand" href="/">THREAD<span>&</span>CO</Link>
         <div className="nav-links">

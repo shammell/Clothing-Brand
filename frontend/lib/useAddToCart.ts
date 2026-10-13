@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { type CartLine, type Product, getCartSnapshot, writeCart } from "./shop-store";
-import { cartDrawerSuppressedFor, openCartDrawer } from "./ui-store";
+import { addedAnnouncement, announce, cartDrawerSuppressedFor, openCartDrawer } from "./ui-store";
 import { firstAvailableColor, variantStock } from "./variants";
 
 // Deliberate, brief pacing for the "Add to bag" button's adding -> added
@@ -99,6 +99,7 @@ export function useAddToCart() {
           )
         : [...currentCart, { ...product, size: selection.size, color: selection.color, quantity: selection.quantity }];
     writeCart(nextCart);
+    announce(addedAnnouncement(product.name, selection.size, nextCart.reduce((sum, line) => sum + line.quantity, 0)));
 
     // Clear-before-set: if this product was already mid-cycle from a
     // previous click, cancel those pending timeouts first so rapid re-clicks
