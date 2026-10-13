@@ -621,7 +621,7 @@ export default function AdminPage() {
             <p role="heading" aria-level={1} className="text-lg font-semibold text-slate-900">{TAB_LABELS[tab]}</p>
             <div className="flex items-center gap-3 text-sm text-slate-500 md:hidden">
               <span className="max-w-[120px] truncate">{currentUser}</span>
-              <button onClick={logout} className={iconButtonClass} title="Log out">
+              <button onClick={logout} className={iconButtonClass} title="Log out" aria-label="Log out">
                 <IconLogout className="h-5 w-5" />
               </button>
             </div>
@@ -710,7 +710,7 @@ export default function AdminPage() {
                       <option key={status} value={status}>{status === "all" ? "All statuses" : status}</option>
                     ))}
                   </select>
-                  <button onClick={loadOrders} className={iconButtonClass} title="Refresh orders">
+                  <button onClick={loadOrders} className={iconButtonClass} title="Refresh orders" aria-label="Refresh orders">
                     <IconRefresh className="h-4 w-4" />
                   </button>
                 </div>
@@ -792,7 +792,7 @@ export default function AdminPage() {
                       <option key={roleOption} value={roleOption}>{roleOption === "all" ? "All roles" : roleOption}</option>
                     ))}
                   </select>
-                  <button onClick={loadUsers} className={iconButtonClass} title="Refresh users">
+                  <button onClick={loadUsers} className={iconButtonClass} title="Refresh users" aria-label="Refresh users">
                     <IconRefresh className="h-4 w-4" />
                   </button>
                 </div>
@@ -856,6 +856,7 @@ export default function AdminPage() {
                               disabled={updatingUserId === user.id}
                               className={iconButtonClass}
                               title={user.is_blocked ? "Unblock user" : "Block user"}
+                              aria-label={`${user.is_blocked ? "Unblock" : "Block"} ${user.username}`}
                             >
                               {user.is_blocked ? <IconUnlock className="h-4 w-4" /> : <IconLock className="h-4 w-4" />}
                             </button>
@@ -873,7 +874,7 @@ export default function AdminPage() {
             <section className={cardClass}>
               <div className="mb-4 flex items-center justify-between">
                 <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Audit log</p>
-                <button onClick={loadAuditLog} className={iconButtonClass} title="Refresh audit log">
+                <button onClick={loadAuditLog} className={iconButtonClass} title="Refresh audit log" aria-label="Refresh audit log">
                   <IconRefresh className="h-4 w-4" />
                 </button>
               </div>

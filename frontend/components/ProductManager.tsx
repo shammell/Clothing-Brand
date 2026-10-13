@@ -311,7 +311,7 @@ export function ProductManager({
       <section className={cardClass}>
         <div className="mb-4 flex items-center justify-between">
           <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Products ({products.length})</p>
-          <button onClick={loadProducts} className={iconButtonClass} title="Refresh products">
+          <button onClick={loadProducts} className={iconButtonClass} title="Refresh products" aria-label="Refresh products">
             <IconRefresh className="h-4 w-4" />
           </button>
         </div>
@@ -338,7 +338,12 @@ export function ProductManager({
                     <td className="py-2.5 pr-4 text-slate-600">{product.stock}</td>
                     <td className="py-2.5 pr-4">
                       <div className="flex items-center gap-1 whitespace-nowrap">
-                        <button onClick={() => startEdit(product)} className={iconButtonClass} title="Edit product">
+                        <button
+                          onClick={() => startEdit(product)}
+                          className={iconButtonClass}
+                          title="Edit product"
+                          aria-label={`Edit ${product.name}`}
+                        >
                           <IconPencil className="h-4 w-4" />
                         </button>
                         <button
@@ -346,6 +351,7 @@ export function ProductManager({
                           disabled={deletingId === product.id}
                           className={`${iconButtonClass} hover:bg-red-50 hover:text-red-600`}
                           title="Delete product"
+                          aria-label={`Delete ${product.name}`}
                         >
                           <IconTrash className="h-4 w-4" />
                         </button>

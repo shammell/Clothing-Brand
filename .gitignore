@@ -27,3 +27,14 @@ Thumbs.db
 
 .vercel
 .env*
+
+# Local dev-server logs
+backend/backend-dev.log
+frontend/frontend-dev.log
+
+# ui-ux-pro-max / ui-styling skill: keep the functional core in git,
+# skip its test fixtures, coverage output, and canvas-generation fonts
+.claude/skills/*/scripts/tests/
+.claude/skills/*/scripts/*/tests/
+.claude/skills/*/scripts/.coverage
+.claude/skills/ui-styling/canvas-fonts/
