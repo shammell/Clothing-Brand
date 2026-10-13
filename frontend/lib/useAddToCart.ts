@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { type CartLine, type Product, getCartSnapshot, writeCart } from "./shop-store";
+import { cartDrawerSuppressedFor, openCartDrawer } from "./ui-store";
 import { firstAvailableColor, variantStock } from "./variants";
 
 // Deliberate, brief pacing for the "Add to bag" button's adding -> added
@@ -107,6 +108,7 @@ export function useAddToCart() {
     setAddStatus((current) => ({ ...current, [product.id]: "adding" }));
     const addedTimeout = setTimeout(() => {
       setAddStatus((current) => ({ ...current, [product.id]: "added" }));
+      if (!cartDrawerSuppressedFor(window.location.pathname)) openCartDrawer();
       const idleTimeout = setTimeout(() => {
         setAddStatus((current) => {
           const next = { ...current };

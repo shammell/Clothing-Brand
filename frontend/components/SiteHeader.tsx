@@ -9,6 +9,7 @@ import {
   subscribeToStorage,
 } from "@/lib/auth-store";
 import { getCartServerSnapshot, getCartSnapshot } from "@/lib/shop-store";
+import { cartDrawerSuppressedFor, openCartDrawer } from "@/lib/ui-store";
 
 const OWN_SHELL_PREFIXES = ["/admin", "/lister"];
 
@@ -75,9 +76,15 @@ export function SiteHeader() {
           >
             {currentUser ? currentUser[0].toUpperCase() : "♙"}
           </Link>
-          <Link href="/cart" className={`icon-button cart-button interactive${cartBumped ? " bump" : ""}`} aria-label="Open cart">
-            ♧ <b>{cartCount}</b>
-          </Link>
+          {cartDrawerSuppressedFor(pathname) ? (
+            <Link href="/cart" className={`icon-button cart-button interactive${cartBumped ? " bump" : ""}`} aria-label="Open cart">
+              ♧ <b>{cartCount}</b>
+            </Link>
+          ) : (
+            <button type="button" onClick={openCartDrawer} className={`icon-button cart-button interactive${cartBumped ? " bump" : ""}`} aria-label="Open cart">
+              ♧ <b>{cartCount}</b>
+            </button>
+          )}
         </div>
       </nav>
     </>
