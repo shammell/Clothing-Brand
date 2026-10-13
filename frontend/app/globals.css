@@ -17,7 +17,7 @@ button { cursor:pointer; }
    viewport's own scroller and doesn't capture descendants this way. */
 .announcement { background:#25221f; color:#f7f4ef; text-align:center; padding:10px; font-size:11px; letter-spacing:.12em; text-transform:uppercase; }
 .announcement span { color:#c56f4d; margin:0 10px; }
-.navbar { height:82px; display:flex; align-items:center; justify-content:space-between; padding:0 5vw; border-bottom:1px solid var(--line); background:var(--cream); position:sticky; top:0; z-index:9; }
+.navbar { view-transition-name:site-header; height:82px; display:flex; align-items:center; justify-content:space-between; padding:0 5vw; border-bottom:1px solid var(--line); background:var(--cream); position:sticky; top:0; z-index:9; }
 .brand { color:var(--ink); font-size:21px; font-weight:800; letter-spacing:.16em; text-decoration:none; }
 .brand span { color:var(--accent); }
 .nav-links { display:flex; gap:34px; margin-left:10%; }
@@ -269,3 +269,8 @@ html:has(dialog[open]) { overflow:hidden; scrollbar-gutter:stable; }
 .skeleton-line { height:14px; margin:6px 0; border-radius:2px; }
 @keyframes shimmer { from { background-position:200% 0; } to { background-position:-200% 0; } }
 @media (prefers-reduced-motion: reduce) { .skeleton { animation:none; background:#e7e2dc; } }
+
+/* Route changes cross-fade the content; the header keeps its own transition name so it stays put. */
+::view-transition-group(.page-fade) { animation-duration:var(--dur-base); }
+::view-transition-old(.page-fade), ::view-transition-new(.page-fade) { animation-timing-function:var(--ease-out); }
+::view-transition-group(site-header) { animation:none; }
