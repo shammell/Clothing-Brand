@@ -13,6 +13,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 
 from app.core.database import get_database
+from app.services.sizing import recommend_size
 from app.services.variants import ensure_variants
 
 MAX_RESULTS = 6
@@ -164,9 +165,59 @@ async def _get_variant_availability(args: dict[str, Any], context: ToolContext) 
     }
 
 
+async def _recommend_size(args: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    raw_id = args.get("product_id")
+    try:
+        object_id = ObjectId(raw_id) if isinstance(raw_id, str) else None
+    except InvalidId:
+        object_id = None
+    height, weight, fit = args.get("height_cm"), args.get("weight_kg"), args.get("fit", "regular")
+    numbers_ok = all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in (height, weight))
+    if object_id is None or not numbers_ok or fit not in ("snug", "regular", "relaxed"):
+        return {"error": "Need a valid product_id, height_cm, weight_kg and fit"}
+    if not (100 <= height <= 250 and 30 <= weight <= 250):
+        return {"error": "height_cm or weight_kg is out of range"}
+    document = await get_database()["products"].find_one({"_id": object_id})
+    if not document:
+        return {"error": "Product not found"}
+    product = ensure_variants(document)
+    context.add_product(product)
+    result = recommend_size(product, height, weight, fit)
+    recommendation = result["recommendation"]
+    if recommendation:
+        context.size_recommendation = {
+            "product_id": str(product["_id"]),
+            "size": recommendation["size"],
+            "confidence": recommendation["confidence"],
+            "in_stock": recommendation["in_stock"],
+        }
+    return result
+
+
+TOOL_DEFINITIONS.append(
+    {
+        "type": "function",
+        "function": {
+            "name": "recommend_size",
+            "description": "Recommend a size for a product from the shopper's height, weight and fit preference.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "product_id": {"type": "string"},
+                    "height_cm": {"type": "number"},
+                    "weight_kg": {"type": "number"},
+                    "fit": {"type": "string", "enum": ["snug", "regular", "relaxed"]},
+                },
+                "required": ["product_id", "height_cm", "weight_kg", "fit"],
+            },
+        },
+    }
+)
+
 _HANDLERS = {
     "search_products": _search_products,
     "get_variant_availability": _get_variant_availability,
+    "recommend_size": _recommend_size,
 }
 
 

@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -51,3 +51,9 @@ class ProductResponse(ProductBase):
     stock: int
 
     model_config = {"from_attributes": True}
+
+
+class SizeRecommendationRequest(BaseModel):
+    height_cm: float = Field(ge=100, le=250)
+    weight_kg: float = Field(ge=30, le=250)
+    fit: Literal["snug", "regular", "relaxed"] = "regular"

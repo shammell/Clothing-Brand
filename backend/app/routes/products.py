@@ -2,10 +2,12 @@ from typing import Any, Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from app.core.database import get_database
-from app.models.product import ProductCreate, ProductResponse
+from app.core.limiter import limiter
+from app.models.product import ProductCreate, ProductResponse, SizeRecommendationRequest
+from app.services.sizing import recommend_size, size_guide
 from app.services.variants import build_update_document, build_product_document, ensure_variants
 from app.services.auth_service import CurrentUser, require_role
 
@@ -53,6 +55,25 @@ async def get_product(product_id: str):
             detail="Product not found",
         )
     return serialize_product(product)
+
+
+async def load_product(product_id: str) -> dict[str, Any]:
+    product = await get_database()["products"].find_one({"_id": parse_product_id(product_id)})
+    if not product:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
+    return ensure_variants(product)
+
+
+@router.get("/{product_id}/size-guide")
+async def get_size_guide(product_id: str):
+    return size_guide(await load_product(product_id))
+
+
+@router.post("/{product_id}/size-recommendation")
+@limiter.limit("30/minute")
+async def post_size_recommendation(request: Request, product_id: str, body: SizeRecommendationRequest):
+    product = await load_product(product_id)
+    return recommend_size(product, body.height_cm, body.weight_kg, body.fit)
 
 
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
