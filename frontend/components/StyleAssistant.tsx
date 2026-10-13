@@ -1,5 +1,6 @@
 "use client";
 
+import { rateLimitMessage } from "@/lib/rate-limit";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState, useSyncExternalStore } from "react";
@@ -104,8 +105,13 @@ export function StyleAssistant() {
       });
       if (!response.ok) {
         const busy = response.status === 503;
+        const limited = response.status === 429;
         setError({
-          message: busy ? "I'm helping a lot of people right now." : "Sorry, the style assistant is unavailable right now.",
+          message: limited
+            ? rateLimitMessage(response, "The style assistant")
+            : busy
+              ? "I'm helping a lot of people right now."
+              : "Sorry, the style assistant is unavailable right now.",
           busy,
           retry: message,
         });

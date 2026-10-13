@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request
 
 from app.core.config import settings
-from app.core.limiter import limiter
+from app.core.limiter import consume_global, limiter
 from app.models.search import VisualSearchResponse
 from app.services.visual_search import (
     ALLOWED_TYPES,
@@ -29,11 +29,9 @@ async def read_limited_body(request: Request) -> bytes:
 
 
 @router.post("/visual", response_model=VisualSearchResponse)
-@limiter.limit("5/minute")
-# Anonymous endpoint that forwards to a paid, rate-limited vision model, so it
-# carries the same two global caps as /chat/ (constant key, not per-IP).
-@limiter.shared_limit(settings.VISUAL_SEARCH_GLOBAL_BURST_RATE_LIMIT, scope="visual_global_burst", key_func=lambda: "global")
-@limiter.shared_limit(settings.VISUAL_SEARCH_GLOBAL_SUSTAINED_RATE_LIMIT, scope="visual_global_sustained", key_func=lambda: "global")
+@limiter.limit(settings.VISUAL_SEARCH_IP_RATE_LIMIT)
+# Anonymous endpoint that forwards to a paid, rate-limited vision model. The global
+# caps are charged below, after validation, so junk uploads cannot drain them.
 async def search_by_photo(request: Request):
     """Body is the raw image (Content-Type image/jpeg, image/png or image/webp)."""
     content_type = request.headers.get("content-type", "").split(";")[0].strip().lower()
@@ -42,6 +40,8 @@ async def search_by_photo(request: Request):
     image = await read_limited_body(request)
     if not image:
         raise HTTPException(status_code=400, detail="No photo received")
+    consume_global("visual_global_burst", settings.VISUAL_SEARCH_GLOBAL_BURST_RATE_LIMIT)
+    consume_global("visual_global_sustained", settings.VISUAL_SEARCH_GLOBAL_SUSTAINED_RATE_LIMIT)
     try:
         attributes, results = await visual_search(image, content_type)
     except UnreadablePhotoError as error:

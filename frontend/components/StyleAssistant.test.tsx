@@ -69,6 +69,14 @@ describe("StyleAssistant", () => {
     await screen.findByText("Back now.");
   });
 
+  it("explains a rate limit instead of calling the assistant unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 429, headers: { "Retry-After": "86400" } })));
+    render(<StyleAssistant />);
+    open();
+    fireEvent.click(screen.getByText("What's new?"));
+    expect(await screen.findByText(/has reached its limit/)).toBeTruthy();
+  });
+
   it("is hidden on admin pages and closes with Escape", () => {
     const { rerender, container } = render(<StyleAssistant />);
     open();

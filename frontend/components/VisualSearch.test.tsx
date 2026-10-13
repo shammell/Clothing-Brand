@@ -52,6 +52,16 @@ describe("VisualSearch", () => {
     expect(last?.status === "error" && typeof last.retry).toBe("function");
   });
 
+  it("tells the shopper to wait when rate limited", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("{}", { status: 429, headers: { "Retry-After": "60" } })));
+    const states: VisualState[] = [];
+    render(<VisualSearch onChange={(state) => states.push(state)} />);
+    pick(photo());
+    await waitFor(() => expect(states.at(-1)?.status).toBe("error"));
+    const last = states.at(-1);
+    expect(last?.status === "error" && last.message).toMatch(/about a minute/);
+  });
+
   it("formats the match description", () => {
     expect(describeMatch({ category: "Hoodies", colors: ["Blue"], keywords: [] })).toBe("Hoodies · Blue");
     expect(describeMatch({ category: null, colors: [], keywords: [] })).toBe("");

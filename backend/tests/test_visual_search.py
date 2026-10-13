@@ -94,7 +94,32 @@ def test_provider_busy_maps_to_503_and_other_failures_to_502(client, vision, see
 
 def test_per_ip_rate_limit_is_enforced(client, vision, seed_product):
     seed_product()
-    for _ in range(5):
+    for _ in range(3):
         vision["responses"].append(_vision({"category": None, "colors": [], "keywords": []}))
         assert _post(client).status_code == 200
-    assert _post(client).status_code == 429
+    blocked = _post(client)
+    assert blocked.status_code == 429
+    assert blocked.headers["retry-after"] == "60"
+    assert "slow down" in blocked.json()["detail"]
+    assert len(vision["requests"]) == 3
+
+
+def test_global_cap_blocks_before_the_provider_is_called(client, vision, seed_product, monkeypatch):
+    seed_product()
+    monkeypatch.setattr(visual_search.settings, "VISUAL_SEARCH_GLOBAL_BURST_RATE_LIMIT", "2/minute")
+    for _ in range(2):
+        vision["responses"].append(_vision({"category": None, "colors": [], "keywords": []}))
+        assert _post(client).status_code == 200
+    capped = _post(client)
+    assert capped.status_code == 429 and capped.headers["retry-after"] == "60"
+    assert "right now" in capped.json()["detail"]
+    assert len(vision["requests"]) == 2
+
+
+def test_rejected_uploads_do_not_spend_the_global_budget(client, vision, seed_product, monkeypatch):
+    seed_product()
+    monkeypatch.setattr(visual_search.settings, "VISUAL_SEARCH_GLOBAL_BURST_RATE_LIMIT", "1/minute")
+    assert _post(client, headers={"content-type": "text/plain"}).status_code == 415
+    assert _post(client, body=b"").status_code == 400
+    vision["responses"] = [_vision({"category": None, "colors": [], "keywords": []})]
+    assert _post(client).status_code == 200

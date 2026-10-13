@@ -36,6 +36,7 @@ Verification at last run: backend `pytest` 151 pass, frontend `vitest` 84 pass, 
 
 - Done 2026-10-14: variant migration run on prod (7 products), companions generated, Groq tool calling verified live, vision verified live (default vision model changed to `qwen/qwen3.8-27b`; the llama-4-scout default no longer exists; `max_tokens` 300 added because the model's output-token limit rejected the default).
 - Merchant must review the placeholder size charts (`backend/app/data/size_charts.py`).
+- Rate limits reworked 2026-10-14: per-IP caps now below the global burst (chat `5/minute;40/day`, photo `3/minute;15/day`), photo-search global caps charged only after validation (`consume_global`), 429s carry `Retry-After` and the UI explains them. **Prod still has no `REDIS_URL` and no `TRUSTED_PROXY_HOPS`**: on Vercel the "global" caps are per-instance, and per-IP may collapse to the proxy IP. Needs a Redis (Upstash via Marketplace) and a live check of the client IP before relying on them.
 - Merge/push only after the user says so. Migration is already applied, so the push is safe.
 
 ## Local dev notes

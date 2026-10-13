@@ -1,5 +1,6 @@
 "use client";
 
+import { rateLimitMessage } from "@/lib/rate-limit";
 import { useRef, useState, type DragEvent } from "react";
 import { downscaleImage } from "@/lib/downscaleImage";
 
@@ -18,6 +19,7 @@ export function describeMatch(attributes: VisualAttributes): string {
 }
 
 async function errorMessage(response: Response): Promise<string> {
+  if (response.status === 429) return rateLimitMessage(response, "Photo search");
   if (response.status === 503) return "Photo search is busy, try again shortly";
   if (response.status === 413) return "That photo is too large";
   if (response.status === 415) return "Please choose a JPEG, PNG or WebP photo";

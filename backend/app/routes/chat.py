@@ -10,7 +10,7 @@ router = APIRouter(prefix="/chat", tags=["Chat"])
 
 
 @router.post("/", response_model=ChatResponse)
-@limiter.limit("15/minute")
+@limiter.limit(settings.CHAT_IP_RATE_LIMIT)
 # This endpoint is intentionally unauthenticated (anonymous visitors should be
 # able to ask the style assistant before creating an account) and forwards
 # every call to a paid Groq API request. The per-IP limit above stops any one
