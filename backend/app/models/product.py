@@ -2,6 +2,12 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, model_validator
 
+# sizes x colors is expanded into one variant each, so both lists are capped
+# to keep a single request from generating an enormous document.
+MAX_OPTIONS = 15
+MAX_VARIANTS = 200
+
+
 class Variant(BaseModel):
     sku: str = ""
     size: str = Field(min_length=1, max_length=50)
@@ -21,9 +27,9 @@ class ProductBase(BaseModel):
 class ProductCreate(ProductBase):
     # Either send variants (sizes, colors and stock are then derived by the
     # server) or the legacy sizes + colors + stock trio.
-    variants: Optional[list[Variant]] = Field(default=None, min_length=1)
-    sizes: Optional[list[str]] = Field(default=None, min_length=1)
-    colors: Optional[list[str]] = Field(default=None, min_length=1)
+    variants: Optional[list[Variant]] = Field(default=None, min_length=1, max_length=MAX_VARIANTS)
+    sizes: Optional[list[str]] = Field(default=None, min_length=1, max_length=MAX_OPTIONS)
+    colors: Optional[list[str]] = Field(default=None, min_length=1, max_length=MAX_OPTIONS)
     stock: Optional[int] = Field(default=None, ge=0)
 
     @model_validator(mode="after")

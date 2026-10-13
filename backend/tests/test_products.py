@@ -225,3 +225,26 @@ def test_derived_fields_correct_after_update(client, admin_headers, seed_product
     assert body["stock"] == 5
     assert body["sizes"] == ["L", "XL"]
     assert body["colors"] == ["Navy"]
+
+
+def test_legacy_update_with_same_total_keeps_variant_stock(client, admin_headers, seed_product):
+    variants = [
+        {"sku": "A", "size": "S", "color": "Black", "stock": 0},
+        {"sku": "B", "size": "M", "color": "Black", "stock": 9},
+    ]
+    product_id = seed_product(variants=variants, sizes=["S", "M"], colors=["Black"], stock=9)
+    payload = {**LEGACY_PAYLOAD, "sizes": ["S", "M"], "colors": ["Black"], "stock": 9, "price": 30.0}
+    body = client.put(f"/products/{product_id}", json=payload, headers=admin_headers).json()
+    assert [v["stock"] for v in body["variants"]] == [0, 9]
+
+
+def test_legacy_update_with_new_total_resplits(client, admin_headers, seed_product):
+    product_id = seed_product(sizes=["S", "M"], colors=["Black"], stock=4)
+    payload = {**LEGACY_PAYLOAD, "sizes": ["S", "M"], "colors": ["Black"], "stock": 10}
+    body = client.put(f"/products/{product_id}", json=payload, headers=admin_headers).json()
+    assert body["stock"] == 10
+
+
+def test_oversized_size_color_matrix_rejected(client, admin_headers):
+    payload = {**LEGACY_PAYLOAD, "sizes": [f"s{i}" for i in range(16)], "colors": ["Black"]}
+    assert client.post("/products/", json=payload, headers=admin_headers).status_code == 422

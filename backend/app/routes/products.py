@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.database import get_database
 from app.models.product import ProductCreate, ProductResponse
-from app.services.variants import build_product_document, ensure_variants
+from app.services.variants import build_update_document, build_product_document, ensure_variants
 from app.services.auth_service import CurrentUser, require_role
 
 
@@ -74,15 +74,16 @@ async def create_product(product: ProductCreate, _: CurrentUser = Depends(requir
 async def update_product(product_id: str, product: ProductCreate, _: CurrentUser = Depends(require_role("admin", "lister"))):
     object_id = parse_product_id(product_id)
     db = get_database()
-    result = await db["products"].find_one_and_update(
-        {"_id": object_id},
-        {"$set": build_product_document(str(object_id), product.model_dump())},
-    )
-    if not result:
+    existing = await db["products"].find_one({"_id": object_id})
+    if not existing:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found",
         )
+    await db["products"].update_one(
+        {"_id": object_id},
+        {"$set": build_update_document(str(object_id), product.model_dump(), ensure_variants(existing))},
+    )
     updated = await db["products"].find_one({"_id": object_id})
     if updated is None:
         raise HTTPException(

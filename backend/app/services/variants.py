@@ -58,3 +58,28 @@ def ensure_variants(product: dict[str, Any]) -> dict[str, Any]:
         return product
     variants = split_stock(product["sizes"], product["colors"], product["stock"])
     return product | build_variant_fields(str(product["_id"]), variants)
+
+
+def build_update_document(
+    product_id: str, payload: dict[str, Any], existing: dict[str, Any] | None
+) -> dict[str, Any]:
+    """Like build_product_document, but a legacy-shape update must not wipe real per-variant stock.
+
+    If the payload only restates the product's current total, keep each retained
+    variant's stock (new combinations start at 0). A different total is an
+    explicit restock/correction and is re-split.
+    """
+    if (
+        existing
+        and not payload.get("variants")
+        and payload["stock"] == existing["stock"]
+    ):
+        current = {(v["size"], v["color"]): v["stock"] for v in existing["variants"]}
+        payload = payload | {
+            "variants": [
+                {"size": size, "color": color, "stock": current.get((size, color), 0)}
+                for size in payload["sizes"]
+                for color in payload["colors"]
+            ]
+        }
+    return build_product_document(product_id, payload)
