@@ -50,6 +50,7 @@ async def extract_attributes(image: bytes, content_type: str) -> VisionAttribute
     data_uri = f"data:{content_type};base64,{base64.b64encode(image).decode()}"
     payload = {
         "model": settings.GROQ_VISION_MODEL,
+        "max_tokens": 300,
         "temperature": 0,
         "response_format": {"type": "json_object"},
         "messages": [

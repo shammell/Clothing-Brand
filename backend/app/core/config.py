@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "your-secret-key"
     GROQ_API_KEY: str = "your-groq-api-key"
     GROQ_MODEL: str = "openai/gpt-oss-20b"
-    GROQ_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
+    GROQ_VISION_MODEL: str = "qwen/qwen3.8-27b"
     GROQ_TIMEOUT_SECONDS: float = 30.0
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30

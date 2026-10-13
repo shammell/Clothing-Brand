@@ -34,13 +34,9 @@ Verification at last run: backend `pytest` 151 pass, frontend `vitest` 84 pass, 
 
 ### Still to do
 
-1. **Finish the live browser pass (UI-13).** Only checked so far: shop (1440), product page with sold-out size + drawer (1440), lookbook + assistant (390). Not yet seen: reduced-motion, keyboard-only run, card to product image morph, photo search flow, Find my size and Shop this look dialogs, drawer fade-out, the quantity-stepper CSS fix, every surface at both widths. Playwright disconnected mid-session; reconnect and redo.
-2. **Before deploying (user actions):**
-   - Run `backend/scripts/migrate_product_variants.py --dry-run`, review, then run once. NOTE: `backend/.env` points at the production Atlas cluster, so even the dry run read prod.
-   - Run `backend/scripts/generate_companions.py` so `/lookbook` has looks.
-   - Check Groq tool calling (`openai/gpt-oss-20b`) and vision (`GROQ_VISION_MODEL`) with the real key. Mocks pass; no live call was made. Chat falls back to plain replies if tools are unsupported.
-   - Merchant must review the placeholder size charts (`backend/app/data/size_charts.py`).
-3. Merge/push only after the user says so.
+- Done 2026-10-14: variant migration run on prod (7 products), companions generated, Groq tool calling verified live, vision verified live (default vision model changed to `qwen/qwen3.8-27b`; the llama-4-scout default no longer exists; `max_tokens` 300 added because the model's output-token limit rejected the default).
+- Merchant must review the placeholder size charts (`backend/app/data/size_charts.py`).
+- Merge/push only after the user says so. Migration is already applied, so the push is safe.
 
 ## Local dev notes
 
