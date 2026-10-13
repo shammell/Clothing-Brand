@@ -221,7 +221,7 @@ html:has(dialog[open]) { overflow:hidden; scrollbar-gutter:stable; }
 .auth-switch { width:100%; border:0; background:none; color:var(--accent); padding:16px 0 0; font-size:11px; }
 .auth-error { color:#b94343; font-size:11px; }
 @media (max-width:800px) {
-  .nav-links { display:none; }.navbar { padding:0 20px; }.search-box { display:none; }
+  .nav-links { display:none; }.navbar { padding:0 20px; }
   .hero { grid-template-columns:1fr; }.hero-image { min-height:420px; }.hero-copy { padding:70px 24px; }
   .category-strip { display:block; padding:25px 24px; }.category-list { gap:14px; overflow-x:auto; margin-top:15px; }
   .products-section { padding:55px 24px 70px; }.product-grid { grid-template-columns:repeat(2,1fr); gap:25px 10px; }
@@ -370,3 +370,17 @@ dialog.fit-dialog::backdrop { background:#25221f66; }
 .category-strip { gap:14px; }
 
 .drawer-line.leaving { opacity:0; transform:translateX(12px); transition:opacity var(--dur-fast) var(--ease-in-out), transform var(--dur-fast) var(--ease-in-out); }
+
+/* Mobile header menu and search: the link row becomes a dropdown under the navbar. */
+.menu-toggle { display:none; }
+@media (max-width:800px) {
+  .menu-toggle { display:inline-flex; align-items:center; justify-content:center; min-width:44px; min-height:44px; }
+  .nav-links { display:none; position:absolute; top:100%; left:0; right:0; margin:0; flex-direction:column; gap:0; background:var(--cream); border-bottom:1px solid var(--line); padding:6px 20px 14px; }
+  .nav-links.open { display:flex; }
+  .nav-links a { padding:14px 0; font-size:14px; border-bottom:1px solid var(--line); }
+  .nav-links a:last-child { border-bottom:0; }
+  .category-strip { display:flex; flex-wrap:wrap; align-items:center; }
+  .search-box { flex:1; min-width:0; }
+  .search-box input { flex:1; width:auto; min-width:0; }
+  .category-list { flex-basis:100%; margin-top:4px; }
+}

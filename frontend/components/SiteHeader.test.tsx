@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 
 const pathnameMock = vi.hoisted(() => ({ value: "/" }));
 vi.mock("next/navigation", () => ({ usePathname: () => pathnameMock.value }));
@@ -55,5 +55,19 @@ describe("SiteHeader announcements", () => {
     expect(region.getAttribute("aria-live")).toBe("polite");
     expect(region.textContent).toBe("Added Tee, size M. Bag has 3 items.");
     expect(addedAnnouncement("Tee", "M", 1)).toBe("Added Tee, size M. Bag has 1 item.");
+  });
+});
+
+describe("SiteHeader mobile menu", () => {
+  it("toggles the link menu and closes it on Escape", () => {
+    pathnameMock.value = "/shop";
+    render(<SiteHeader />);
+    const toggle = screen.getByLabelText("Open menu");
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    fireEvent.click(toggle);
+    expect(screen.getByLabelText("Close menu").getAttribute("aria-expanded")).toBe("true");
+    expect(document.getElementById("site-menu")?.className).toContain("open");
+    fireEvent.keyDown(window, { key: "Escape" });
+    expect(screen.getByLabelText("Open menu").getAttribute("aria-expanded")).toBe("false");
   });
 });
