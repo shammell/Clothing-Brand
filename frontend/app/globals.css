@@ -365,3 +365,6 @@ dialog.fit-dialog::backdrop { background:#25221f66; }
 .look-size-row { padding:14px 0; border-bottom:1px solid var(--line); font-size:13px; }
 .look-size-row b { display:block; font-weight:normal; margin-bottom:4px; }
 @media (max-width: 760px) { .look-card { grid-template-columns:1fr; gap:20px; } .look-card:nth-child(even) { direction:ltr; } }
+
+.cart-item .cart-item-qty { flex-direction:row; align-items:center; }
+.category-strip { gap:14px; }
