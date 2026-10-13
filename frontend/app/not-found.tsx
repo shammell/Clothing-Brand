@@ -3,10 +3,6 @@ import Link from "next/link";
 export default function NotFound() {
   return (
     <main className="store-shell">
-      <nav className="navbar">
-        <Link className="brand" href="/">THREAD<span>&</span>CO</Link>
-        <Link href="/" className="back-link">← Back home</Link>
-      </nav>
       <section className="page-shell" style={{ textAlign: "center" }}>
         <p className="eyebrow">404</p>
         <h1>This page doesn&apos;t exist.</h1>

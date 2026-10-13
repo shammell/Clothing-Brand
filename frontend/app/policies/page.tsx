@@ -10,10 +10,6 @@ export const metadata: Metadata = {
 export default function PoliciesPage() {
   return (
     <main className="store-shell">
-      <nav className="navbar">
-        <Link className="brand" href="/">THREAD<span>&</span>CO</Link>
-        <Link href="/" className="back-link">← Back home</Link>
-      </nav>
 
       <section className="page-shell">
         <p className="eyebrow">THE FINE PRINT</p>

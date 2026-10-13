@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { subscribeToStorage } from "@/lib/auth-store";
@@ -46,10 +45,6 @@ export default function ProductDetailPage() {
 
   return (
     <main className="store-shell">
-      <nav className="navbar">
-        <Link className="brand" href="/">THREAD<span>&</span>CO</Link>
-        <Link href="/" className="back-link">← Back to shop</Link>
-      </nav>
 
       {loading && <p className="detail-status">Loading...</p>}
       {!loading && loadError && <p className="detail-status">{loadError}</p>}

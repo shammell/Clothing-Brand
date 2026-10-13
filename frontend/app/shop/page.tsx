@@ -1,7 +1,6 @@
 // frontend/app/shop/page.tsx
 "use client";
 
-import Link from "next/link";
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { ProductCard } from "@/components/ProductCard";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -50,10 +49,6 @@ export default function ShopPage() {
 
   return (
     <main className="store-shell">
-      <nav className="navbar">
-        <Link className="brand" href="/">THREAD<span>&</span>CO</Link>
-        <Link href="/" className="back-link">← Back home</Link>
-      </nav>
 
       <section className="category-strip">
         <label className="search-box">
