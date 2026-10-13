@@ -97,10 +97,12 @@ def consume_global(scope: str, limit_value: str) -> None:
         allowed = limiter._limiter.hit(item, scope, "global")
     except Exception:  # unreachable Redis: degrade to this process, never fail open
         logger.warning("Rate-limit storage unavailable; using in-process fallback for %s", scope)
-        # Same strict in-process ceiling the decorators fall back to (see
-        # in_memory_fallback below), not the configured limit: per-process
-        # counters multiplied across instances must never end up looser than normal.
+        # Enforce BOTH the strict outage ceiling and the configured limit, in
+        # process. The ceiling alone would turn a daily cap (e.g. 100/day) into
+        # 5/minute = 7200/day, looser than normal; the configured limit alone
+        # loses the strict per-minute bound. Both together are never looser.
         allowed = limiter._fallback_limiter.hit(parse(OUTAGE_FALLBACK_LIMIT), scope, "global")
+        allowed = limiter._fallback_limiter.hit(item, scope + ":configured", "global") and allowed
     if not allowed:
         raise HTTPException(
             status_code=429,

@@ -58,3 +58,19 @@ def test_global_budget_falls_back_to_the_strict_ceiling_when_storage_fails(monke
     with pytest.raises(HTTPException) as blocked:
         consume_global("outage_test", "1000/minute")
     assert blocked.value.status_code == 429
+
+
+def test_outage_fallback_still_honours_a_stricter_configured_cap(monkeypatch):
+    import pytest
+    from fastapi import HTTPException
+    from app.core.limiter import consume_global, limiter
+
+    def broken(*args, **kwargs):
+        raise ConnectionError("redis down")
+
+    monkeypatch.setattr(limiter._limiter, "hit", broken)
+    consume_global("outage_daily_test", "2/day")
+    consume_global("outage_daily_test", "2/day")
+    with pytest.raises(HTTPException) as blocked:
+        consume_global("outage_daily_test", "2/day")
+    assert blocked.value.status_code == 429

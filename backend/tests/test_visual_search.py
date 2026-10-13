@@ -116,6 +116,16 @@ def test_global_cap_blocks_before_the_provider_is_called(client, vision, seed_pr
     assert len(vision["requests"]) == 2
 
 
+def test_bytes_that_are_not_the_claimed_image_type_never_reach_the_budget_or_provider(client, vision, seed_product, monkeypatch):
+    seed_product()
+    monkeypatch.setattr(visual_search.settings, "VISUAL_SEARCH_GLOBAL_BURST_RATE_LIMIT", "1/minute")
+    assert _post(client, body=b"junk bytes, not an image").status_code == 415
+    assert _post(client, body=FAKE_IMAGE, headers={"Content-Type": "image/png"}).status_code == 415
+    assert vision["requests"] == []
+    vision["responses"] = [_vision({"category": None, "colors": [], "keywords": []})]
+    assert _post(client).status_code == 200
+
+
 def test_rejected_uploads_do_not_spend_the_global_budget(client, vision, seed_product, monkeypatch):
     seed_product()
     monkeypatch.setattr(visual_search.settings, "VISUAL_SEARCH_GLOBAL_BURST_RATE_LIMIT", "1/minute")

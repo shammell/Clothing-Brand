@@ -15,6 +15,17 @@ from app.services.visual_search import (
 router = APIRouter(prefix="/search", tags=["Search"])
 
 
+def looks_like_image(data: bytes, content_type: str) -> bool:
+    """Cheap magic-byte check that the body matches the claimed image type."""
+    if content_type == "image/jpeg":
+        return data.startswith(b"\xff\xd8\xff")
+    if content_type == "image/png":
+        return data.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/webp":
+        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    return False
+
+
 async def read_limited_body(request: Request) -> bytes:
     """Read the request body, refusing to buffer more than the image cap."""
     declared = request.headers.get("content-length")
@@ -40,6 +51,10 @@ async def search_by_photo(request: Request):
     image = await read_limited_body(request)
     if not image:
         raise HTTPException(status_code=400, detail="No photo received")
+    # Content-Type is client-claimed: without checking the bytes, any junk
+    # labelled image/jpeg would spend the global budget and a paid vision call.
+    if not looks_like_image(image, content_type):
+        raise HTTPException(status_code=415, detail="Upload a JPEG, PNG or WebP photo")
     consume_global("visual_global_burst", settings.VISUAL_SEARCH_GLOBAL_BURST_RATE_LIMIT)
     consume_global("visual_global_sustained", settings.VISUAL_SEARCH_GLOBAL_SUSTAINED_RATE_LIMIT)
     try:
