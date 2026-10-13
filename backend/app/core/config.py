@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     JWT_SECRET_KEY: str = "your-secret-key"
     GROQ_API_KEY: str = "your-groq-api-key"
     GROQ_MODEL: str = "openai/gpt-oss-20b"
+    GROQ_VISION_MODEL: str = "meta-llama/llama-4-scout-17b-16e-instruct"
     GROQ_TIMEOUT_SECONDS: float = 30.0
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
@@ -35,6 +36,9 @@ class Settings(BaseSettings):
     # something to hardcode a guess for - tune both in .env.
     CHAT_GLOBAL_BURST_RATE_LIMIT: str = "10/minute"
     CHAT_GLOBAL_SUSTAINED_RATE_LIMIT: str = "300/day"
+    # Photo search is the scarcest free-tier feature (see PREMIUM_STORE_UI_PLAN.md 6.0).
+    VISUAL_SEARCH_GLOBAL_BURST_RATE_LIMIT: str = "5/minute"
+    VISUAL_SEARCH_GLOBAL_SUSTAINED_RATE_LIMIT: str = "100/day"
     # The limiter's default storage is in-process memory - fine for a single
     # process, but each worker/replica gets its OWN independent counters if
     # the app ever runs as more than one process (uvicorn --workers, gunicorn,

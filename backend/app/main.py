@@ -16,6 +16,7 @@ from app.routes.chat import router as chat_router
 from app.routes.contact import router as contact_router
 from app.routes.orders import router as orders_router
 from app.routes.products import router as products_router
+from app.routes.search import router as search_router
 from app.routes.users import router as users_router
 
 
@@ -42,6 +43,7 @@ app.add_middleware(
 )
 app.include_router(auth_router)
 app.include_router(products_router)
+app.include_router(search_router)
 app.include_router(orders_router)
 app.include_router(chat_router)
 app.include_router(users_router)
