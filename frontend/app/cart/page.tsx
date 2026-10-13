@@ -1,52 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
-import { useSyncExternalStore } from "react";
-import { getAuthServerSnapshot, getCurrentUserSnapshot, subscribeToStorage } from "@/lib/auth-store";
-import { FALLBACK_IMAGE, getCartServerSnapshot, getCartSnapshot, writeCart } from "@/lib/shop-store";
+import { FALLBACK_IMAGE } from "@/lib/shop-store";
+import { useCart } from "@/lib/useCart";
 
 export default function CartPage() {
-  const router = useRouter();
-  const cart = useSyncExternalStore(subscribeToStorage, getCartSnapshot, getCartServerSnapshot);
-  const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
-
-  const removeFromCart = (index: number) => {
-    writeCart(cart.filter((_, cartIndex) => cartIndex !== index));
-  };
-
-  const updateCartQuantity = (index: number, delta: number) => {
-    const line = cart[index];
-    if (!line) return;
-    // Ceiling must distinguish "known stock of exactly 0" from "stock
-    // unknown": `line.stock && line.stock > 0` treats 0 as falsy and falls
-    // through to the 20 fallback, which would let an out-of-stock line's
-    // quantity climb to 20. Computing the ceiling first (capped at 20 same
-    // as the quantity selector in lib/useAddToCart.ts, but only when stock
-    // is a known number - 20 outright when stock is genuinely unspecified)
-    // and then checking the capped result against <=0 means a 0-stock line
-    // always routes through removeFromCart instead of ever being written
-    // with a quantity of 0, while still enforcing the same 20-unit cap as
-    // every other add-to-cart path for stock above 20.
-    const ceiling = typeof line.stock === "number" ? Math.min(line.stock, 20) : 20;
-    const nextQuantity = Math.min(line.quantity + delta, ceiling);
-    if (nextQuantity <= 0) {
-      removeFromCart(index);
-      return;
-    }
-    writeCart(cart.map((item, cartIndex) => (cartIndex === index ? { ...item, quantity: nextQuantity } : item)));
-  };
-
-  const cartTotal = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
-  const cartCount = cart.reduce((sum, item) => sum + item.quantity, 0);
-
-  const goToCheckout = () => {
-    if (!currentUser) {
-      router.push("/login?next=/checkout");
-      return;
-    }
-    router.push("/checkout");
-  };
+  const { cart, cartTotal, cartCount, removeFromCart, updateCartQuantity, goToCheckout } = useCart();
 
   return (
     <main className="page-shell">
