@@ -31,6 +31,7 @@ DEFAULT_SYSTEM_PROMPT = (
 # Free-tier budget: at most 2 tool rounds, so a message costs at most 3 provider calls.
 MAX_TOOL_ROUNDS = 2
 TOOL_HISTORY_MESSAGES = 6
+MAX_CALLS_PER_ROUND = 4
 DEFAULT_RETRY_AFTER_SECONDS = 30
 
 # Tests swap this for an httpx.MockTransport.
@@ -163,6 +164,9 @@ async def get_chat_response(
                 calls = reply.get("tool_calls") if offer_tools else None
                 if not calls:
                     return _final_text(reply)
+                # The model decides how many calls to make; bound the DB work per round
+                # (the dropped calls are removed from the transcript too, so it stays valid).
+                calls = calls[:MAX_CALLS_PER_ROUND]
                 messages.append({"role": "assistant", "content": reply.get("content") or "", "tool_calls": calls})
                 for call in calls:
                     function = call.get("function") or {}

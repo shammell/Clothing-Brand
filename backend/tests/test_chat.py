@@ -117,3 +117,17 @@ def test_old_request_shape_still_works(client, provider):
     response = client.post("/chat/", json={"message": "hi", "history": [{"role": "user", "content": "yo"}]})
     assert response.status_code == 200
     assert response.json()["reply"] == "Hello!"
+
+
+def test_tool_calls_per_round_and_search_cache_are_bounded(client, provider, seed_product):
+    from app.services import chat_tools
+
+    seed_product()
+    many = [_tool_call("search_products", json.dumps({"query": f"q{i}"}), str(i)) for i in range(10)]
+    provider["responses"] = [_reply(tool_calls=many), _reply("Done.")]
+    assert _ask(client).status_code == 200
+    tool_messages = [m for m in provider["requests"][1]["messages"] if m["role"] == "tool"]
+    assert len(tool_messages) == chat_services.MAX_CALLS_PER_ROUND
+    for i in range(chat_tools.MAX_CACHE_ENTRIES + 20):
+        chat_tools._search_cache[f"k{i}"] = (0.0, {})
+    assert len(chat_tools._search_cache) > chat_tools.MAX_CACHE_ENTRIES

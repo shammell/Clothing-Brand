@@ -19,6 +19,7 @@ from app.services.variants import ensure_variants
 MAX_RESULTS = 6
 LOW_STOCK_THRESHOLD = 5
 SEARCH_CACHE_SECONDS = 60
+MAX_CACHE_ENTRIES = 100
 
 _search_cache: dict[str, tuple[float, dict[str, Any]]] = {}
 
@@ -136,7 +137,14 @@ async def _search_products(args: dict[str, Any], context: ToolContext) -> dict[s
             ]
         }
         result["_documents"] = products
-        _search_cache[cache_key] = (time.monotonic(), result)
+        # Keys come from model-chosen arguments, so bound the cache: drop expired
+        # entries, then the oldest, before adding.
+        now = time.monotonic()
+        for key in [k for k, (stamp, _) in _search_cache.items() if now - stamp >= SEARCH_CACHE_SECONDS]:
+            del _search_cache[key]
+        while len(_search_cache) >= MAX_CACHE_ENTRIES:
+            del _search_cache[next(iter(_search_cache))]
+        _search_cache[cache_key] = (now, result)
 
     for product in result["_documents"]:
         context.add_product(product)
