@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.core.database import get_database
 from app.models.product import ProductCreate, ProductResponse
+from app.services.variants import build_product_document, ensure_variants
 from app.services.auth_service import CurrentUser, require_role
 
 
@@ -13,6 +14,7 @@ router = APIRouter(prefix="/products", tags=["Products"])
 
 
 def serialize_product(product: dict[str, Any]) -> dict[str, Any]:
+    product = ensure_variants(product)
     return {
         key: value for key, value in product.items() if key != "_id"
     } | {"id": str(product["_id"])}
@@ -56,8 +58,10 @@ async def get_product(product_id: str):
 @router.post("/", response_model=ProductResponse, status_code=status.HTTP_201_CREATED)
 async def create_product(product: ProductCreate, _: CurrentUser = Depends(require_role("admin", "lister"))):
     db = get_database()
-    result = await db["products"].insert_one(product.model_dump())
-    created = await db["products"].find_one({"_id": result.inserted_id})
+    object_id = ObjectId()
+    document = build_product_document(str(object_id), product.model_dump())
+    await db["products"].insert_one({"_id": object_id} | document)
+    created = await db["products"].find_one({"_id": object_id})
     if created is None:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -72,7 +76,7 @@ async def update_product(product_id: str, product: ProductCreate, _: CurrentUser
     db = get_database()
     result = await db["products"].find_one_and_update(
         {"_id": object_id},
-        {"$set": product.model_dump()},
+        {"$set": build_product_document(str(object_id), product.model_dump())},
     )
     if not result:
         raise HTTPException(

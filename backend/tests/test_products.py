@@ -145,3 +145,83 @@ def test_customer_cannot_create_product(client, auth_headers):
         },
     )
     assert response.status_code == 403
+
+
+LEGACY_PAYLOAD = {
+    "name": "Legacy Tee",
+    "price": 25.0,
+    "category": "T-Shirts",
+    "brand": "TestBrand",
+    "sizes": ["S", "M"],
+    "colors": ["Black", "White"],
+    "image_url": "/products/no-image.svg",
+    "stock": 9,
+}
+
+
+def test_create_product_with_variants_derives_fields(client, admin_headers):
+    payload = {k: v for k, v in LEGACY_PAYLOAD.items() if k not in ("sizes", "colors", "stock")}
+    payload["variants"] = [
+        {"size": "S", "color": "Black", "stock": 5},
+        {"size": "S", "color": "White", "stock": 4},
+        {"size": "M", "color": "Black", "stock": 0},
+    ]
+    response = client.post("/products/", json=payload, headers=admin_headers)
+    assert response.status_code == 201
+    body = response.json()
+    assert body["stock"] == 9
+    assert body["sizes"] == ["S", "M"]
+    assert body["colors"] == ["Black", "White"]
+    assert body["variants"][0]["sku"] == f"{body['id'][-6:].upper()}-S-BLACK"
+    assert [v["stock"] for v in body["variants"]] == [5, 4, 0]
+
+
+def test_create_product_legacy_shape_synthesises_variants(client, admin_headers):
+    response = client.post("/products/", json=LEGACY_PAYLOAD, headers=admin_headers)
+    assert response.status_code == 201
+    body = response.json()
+    assert len(body["variants"]) == 4
+    assert sum(v["stock"] for v in body["variants"]) == 9 == body["stock"]
+    assert [v["stock"] for v in body["variants"]] == [3, 2, 2, 2]
+
+
+def test_duplicate_variant_rejected(client, admin_headers):
+    payload = {k: v for k, v in LEGACY_PAYLOAD.items() if k not in ("sizes", "colors", "stock")}
+    payload["variants"] = [
+        {"size": "S", "color": "Black", "stock": 1},
+        {"size": "S", "color": "Black", "stock": 2},
+    ]
+    response = client.post("/products/", json=payload, headers=admin_headers)
+    assert response.status_code == 422
+
+
+def test_create_without_variants_or_legacy_fields_rejected(client, admin_headers):
+    payload = {k: v for k, v in LEGACY_PAYLOAD.items() if k != "stock"}
+    response = client.post("/products/", json=payload, headers=admin_headers)
+    assert response.status_code == 422
+
+
+def test_unmigrated_document_served_with_synthesised_variants(client, seed_product):
+    product_id = seed_product(sizes=["S", "M"], colors=["Black"], stock=5)
+    body = client.get(f"/products/{product_id}").json()
+    assert [(v["size"], v["color"], v["stock"]) for v in body["variants"]] == [
+        ("S", "Black", 3),
+        ("M", "Black", 2),
+    ]
+    assert body["stock"] == 5
+    assert client.get("/products/").json()[0]["variants"] == body["variants"]
+
+
+def test_derived_fields_correct_after_update(client, admin_headers, seed_product):
+    product_id = seed_product()
+    payload = {k: v for k, v in LEGACY_PAYLOAD.items() if k not in ("sizes", "colors", "stock")}
+    payload["variants"] = [
+        {"size": "L", "color": "Navy", "stock": 2},
+        {"size": "XL", "color": "Navy", "stock": 3},
+    ]
+    response = client.put(f"/products/{product_id}", json=payload, headers=admin_headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["stock"] == 5
+    assert body["sizes"] == ["L", "XL"]
+    assert body["colors"] == ["Navy"]
