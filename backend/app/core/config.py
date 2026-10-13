@@ -33,8 +33,8 @@ class Settings(BaseSettings):
     # the sustained window catches slow abuse that stays under the burst
     # threshold. "Acceptable worst-case spend" is a business call, not
     # something to hardcode a guess for - tune both in .env.
-    CHAT_GLOBAL_BURST_RATE_LIMIT: str = "40/minute"
-    CHAT_GLOBAL_SUSTAINED_RATE_LIMIT: str = "1000/hour"
+    CHAT_GLOBAL_BURST_RATE_LIMIT: str = "10/minute"
+    CHAT_GLOBAL_SUSTAINED_RATE_LIMIT: str = "300/day"
     # The limiter's default storage is in-process memory - fine for a single
     # process, but each worker/replica gets its OWN independent counters if
     # the app ever runs as more than one process (uvicorn --workers, gunicorn,
