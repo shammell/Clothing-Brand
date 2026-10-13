@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useState, ViewTransition } from "react";
+import { useCallback, useState } from "react";
+import { ViewTransition } from "./ViewTransition";
 import { FALLBACK_IMAGE } from "@/lib/shop-store";
 
 type Props = {

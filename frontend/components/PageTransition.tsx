@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ViewTransition } from "react";
+import { ViewTransition } from "./ViewTransition";
 
 // Cross-fades route content on navigation. Admin and lister screens have their
 // own shell and are left alone.

@@ -276,3 +276,14 @@ html:has(dialog[open]) { overflow:hidden; scrollbar-gutter:stable; }
 ::view-transition-group(site-header) { animation:none; }
 
 ::view-transition-group(.morph) { animation-duration:var(--dur-slow); }
+
+/* Cards ease in on first paint (30ms apart, first 8 only). */
+.product-grid .product-card { animation:card-in var(--dur-base) var(--ease-out) backwards; }
+.product-grid .product-card:nth-child(2) { animation-delay:30ms; }
+.product-grid .product-card:nth-child(3) { animation-delay:60ms; }
+.product-grid .product-card:nth-child(4) { animation-delay:90ms; }
+.product-grid .product-card:nth-child(5) { animation-delay:120ms; }
+.product-grid .product-card:nth-child(6) { animation-delay:150ms; }
+.product-grid .product-card:nth-child(7) { animation-delay:180ms; }
+.product-grid .product-card:nth-child(8) { animation-delay:210ms; }
+@keyframes card-in { from { opacity:0; transform:translateY(10px); } }

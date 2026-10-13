@@ -1,7 +1,8 @@
 // frontend/app/shop/page.tsx
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useDeferredValue, useEffect, useMemo, useState, useSyncExternalStore, useTransition } from "react";
+import { ViewTransition } from "@/components/ViewTransition";
 import { ProductCard } from "@/components/ProductCard";
 import { SiteFooter } from "@/components/SiteFooter";
 import { subscribeToStorage } from "@/lib/auth-store";
@@ -26,6 +27,8 @@ export default function ShopPage() {
   const [loadError, setLoadError] = useState("");
   const [activeCategory, setActiveCategory] = useState("All");
   const [query, setQuery] = useState("");
+  const deferredQuery = useDeferredValue(query);
+  const [, startTransition] = useTransition();
   const wishlist = useSyncExternalStore(subscribeToStorage, getWishlistSnapshot, getWishlistServerSnapshot);
   const addToCartApi = useAddToCart();
 
@@ -49,9 +52,9 @@ export default function ShopPage() {
       catalog.filter(
         (product) =>
           (activeCategory === "All" || product.category === activeCategory) &&
-          product.name.toLowerCase().includes(query.toLowerCase()),
+          product.name.toLowerCase().includes(deferredQuery.toLowerCase()),
       ),
-    [activeCategory, query, catalog],
+    [activeCategory, deferredQuery, catalog],
   );
 
   return (
@@ -67,7 +70,7 @@ export default function ShopPage() {
             <button
               className={activeCategory === category ? "category active interactive" : "category interactive"}
               key={category}
-              onClick={() => setActiveCategory(category)}
+              onClick={() => startTransition(() => setActiveCategory(category))}
             >
               {category}
             </button>
@@ -82,16 +85,37 @@ export default function ShopPage() {
         </div>
         {loading && <ProductGridSkeleton count={6} />}
         {!loading && loadError && <p className="detail-status">{loadError}</p>}
-        {!loading && !loadError && (
+        {!loading && !loadError && filteredProducts.length === 0 && (
+          <div className="empty-state" style={{ marginTop: "8vh" }}>
+            <span>♧</span>
+            <p>No styles match</p>
+            <small>Try a different search or category.</small>
+            <div style={{ marginTop: 18 }}>
+              <button
+                type="button"
+                className="primary-button interactive"
+                style={{ cursor: "pointer" }}
+                onClick={() => {
+                  setQuery("");
+                  startTransition(() => setActiveCategory("All"));
+                }}
+              >
+                Clear filters
+              </button>
+            </div>
+          </div>
+        )}
+        {!loading && !loadError && filteredProducts.length > 0 && (
           <div className="product-grid">
             {filteredProducts.map((product) => (
-              <ProductCard
-                key={product.id}
-                product={product}
-                wishlist={wishlist}
-                onToggleWishlist={(id) => toggleWishlist(wishlist, id)}
-                {...addToCartApi}
-              />
+              <ViewTransition key={product.id}>
+                <ProductCard
+                  product={product}
+                  wishlist={wishlist}
+                  onToggleWishlist={(id) => toggleWishlist(wishlist, id)}
+                  {...addToCartApi}
+                />
+              </ViewTransition>
             ))}
           </div>
         )}
