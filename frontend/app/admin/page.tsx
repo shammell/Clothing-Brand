@@ -14,6 +14,9 @@ import {
   writeAuth,
 } from "@/lib/auth-store";
 import { ProductManager } from "@/components/ProductManager";
+import { RevenueChart, OrderStatusBreakdown } from "@/components/RevenueChart";
+import { TableSkeleton, CardSkeleton } from "@/components/TableSkeleton";
+import { SortableTh } from "@/components/SortableTh";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -50,6 +53,13 @@ type Order = {
 const ORDER_STATUSES = ["placed", "processing", "shipped", "delivered", "cancelled"] as const;
 const ORDER_FILTERS = ["all", ...ORDER_STATUSES] as const;
 const OPEN_ORDER_STATUSES = new Set(["placed", "processing"]);
+const ORDER_SORTS = ["newest", "oldest", "total-desc", "total-asc"] as const;
+const ORDER_SORT_LABELS: Record<(typeof ORDER_SORTS)[number], string> = {
+  newest: "Newest first",
+  oldest: "Oldest first",
+  "total-desc": "Highest total",
+  "total-asc": "Lowest total",
+};
 
 type UserSummary = {
   id: string;
@@ -272,6 +282,7 @@ export default function AdminPage() {
   const [orderActionError, setOrderActionError] = useState("");
   const [orderStatusFilter, setOrderStatusFilter] = useState<(typeof ORDER_FILTERS)[number]>("all");
   const [orderSearch, setOrderSearch] = useState("");
+  const [orderSort, setOrderSort] = useState<(typeof ORDER_SORTS)[number]>("newest");
 
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
@@ -498,22 +509,59 @@ export default function AdminPage() {
 
   const filteredOrders = useMemo(() => {
     const query = orderSearch.trim().toLowerCase();
-    return orders.filter((order) => {
+    const matched = orders.filter((order) => {
       if (orderStatusFilter !== "all" && order.status !== orderStatusFilter) return false;
       if (!query) return true;
       const haystack = `${order.id} ${order.shipping_address?.full_name ?? ""}`.toLowerCase();
       return haystack.includes(query);
     });
-  }, [orders, orderStatusFilter, orderSearch]);
+    const sorted = [...matched];
+    sorted.sort((a, b) => {
+      switch (orderSort) {
+        case "oldest":
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+        case "total-desc":
+          return b.total - a.total;
+        case "total-asc":
+          return a.total - b.total;
+        default:
+          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+      }
+    });
+    return sorted;
+  }, [orders, orderStatusFilter, orderSearch, orderSort]);
+
+  const [userSort, setUserSort] = useState<{ key: "username" | "email" | "role" | "created_at"; direction: "asc" | "desc" }>({
+    key: "username",
+    direction: "asc",
+  });
+
+  const toggleUserSort = (key: typeof userSort.key) => {
+    setUserSort((current) =>
+      current.key === key
+        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
+        : { key, direction: "asc" }
+    );
+  };
 
   const filteredUsers = useMemo(() => {
     const query = userSearch.trim().toLowerCase();
-    return users.filter((user) => {
+    const matched = users.filter((user) => {
       if (userRoleFilter !== "all" && user.role !== userRoleFilter) return false;
       if (!query) return true;
       return `${user.username} ${user.email}`.toLowerCase().includes(query);
     });
-  }, [users, userRoleFilter, userSearch]);
+    const sorted = [...matched];
+    const { key, direction } = userSort;
+    sorted.sort((a, b) => {
+      const result =
+        key === "created_at"
+          ? new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          : a[key].localeCompare(b[key]);
+      return direction === "asc" ? result : -result;
+    });
+    return sorted;
+  }, [users, userRoleFilter, userSearch, userSort]);
 
   const stats = useMemo(() => {
     const revenue = orders.reduce((sum, order) => sum + order.total, 0);
@@ -653,12 +701,23 @@ export default function AdminPage() {
                 <StatCard icon={IconGrid} label="Products" value={productCount ?? "—"} />
               </div>
 
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <section className={`${cardClass} md:col-span-2`}>
+                  <p role="heading" aria-level={2} className="mb-4 text-base font-semibold text-slate-900">Revenue, last 14 days</p>
+                  {ordersLoading ? <CardSkeleton /> : <RevenueChart orders={orders} />}
+                </section>
+                <section className={cardClass}>
+                  <p role="heading" aria-level={2} className="mb-4 text-base font-semibold text-slate-900">Orders by status</p>
+                  {ordersLoading ? <CardSkeleton /> : <OrderStatusBreakdown orders={orders} />}
+                </section>
+              </div>
+
               <section className={cardClass}>
                 <div className="mb-4 flex items-center justify-between">
                   <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Recent orders</p>
                   <button onClick={() => setTab("orders")} className={ghostButtonClass}>View all</button>
                 </div>
-                {ordersLoading && <p className="text-sm text-slate-500">Loading...</p>}
+                {ordersLoading && <TableSkeleton rows={4} cols={3} />}
                 {!ordersLoading && orders.length === 0 && <p className="text-sm text-slate-500">No orders yet.</p>}
                 {!ordersLoading && orders.length > 0 && (
                   <ul className="divide-y divide-slate-100 text-sm">
@@ -710,12 +769,22 @@ export default function AdminPage() {
                       <option key={status} value={status}>{status === "all" ? "All statuses" : status}</option>
                     ))}
                   </select>
+                  <select
+                    value={orderSort}
+                    onChange={(event) => setOrderSort(event.target.value as typeof orderSort)}
+                    className={selectClass}
+                    aria-label="Sort orders"
+                  >
+                    {ORDER_SORTS.map((sort) => (
+                      <option key={sort} value={sort}>{ORDER_SORT_LABELS[sort]}</option>
+                    ))}
+                  </select>
                   <button onClick={loadOrders} className={iconButtonClass} title="Refresh orders" aria-label="Refresh orders">
                     <IconRefresh className="h-4 w-4" />
                   </button>
                 </div>
               </div>
-              {ordersLoading && <p className="text-sm text-slate-500">Loading...</p>}
+              {ordersLoading && <TableSkeleton rows={4} cols={3} />}
               {!ordersLoading && ordersError && <p className="text-sm text-red-600">{ordersError}</p>}
               {!ordersLoading && !ordersError && orderActionError && (
                 <p className="mb-3 text-sm text-red-600">{orderActionError}</p>
@@ -797,7 +866,7 @@ export default function AdminPage() {
                   </button>
                 </div>
               </div>
-              {usersLoading && <p className="text-sm text-slate-500">Loading...</p>}
+              {usersLoading && <TableSkeleton rows={5} cols={5} />}
               {!usersLoading && usersError && <p className="text-sm text-red-600">{usersError}</p>}
               {!usersLoading && !usersError && userActionError && (
                 <p className="mb-3 text-sm text-red-600">{userActionError}</p>
@@ -810,10 +879,11 @@ export default function AdminPage() {
                   <table className="w-full text-sm">
                     <thead>
                       <tr className="border-b border-slate-200 text-left text-slate-500">
-                        <th className="py-2 pr-4 font-medium">Username</th>
-                        <th className="py-2 pr-4 font-medium">Email</th>
-                        <th className="py-2 pr-4 font-medium">Role</th>
+                        <SortableTh label="Username" active={userSort.key === "username"} direction={userSort.direction} onClick={() => toggleUserSort("username")} />
+                        <SortableTh label="Email" active={userSort.key === "email"} direction={userSort.direction} onClick={() => toggleUserSort("email")} />
+                        <SortableTh label="Role" active={userSort.key === "role"} direction={userSort.direction} onClick={() => toggleUserSort("role")} />
                         <th className="py-2 pr-4 font-medium">Status</th>
+                        <SortableTh label="Joined" active={userSort.key === "created_at"} direction={userSort.direction} onClick={() => toggleUserSort("created_at")} />
                         <th className="py-2 pr-4 font-medium" />
                       </tr>
                     </thead>
@@ -845,6 +915,7 @@ export default function AdminPage() {
                           <td className="py-2.5 pr-4">
                             <Badge tone={user.is_blocked ? "red" : "green"}>{user.is_blocked ? "Blocked" : "Active"}</Badge>
                           </td>
+                          <td className="whitespace-nowrap py-2.5 pr-4 text-slate-500">{new Date(user.created_at).toLocaleDateString()}</td>
                           <td className="py-2.5 pr-4">
                             <button
                               onClick={() => {
@@ -878,7 +949,7 @@ export default function AdminPage() {
                   <IconRefresh className="h-4 w-4" />
                 </button>
               </div>
-              {auditLoading && <p className="text-sm text-slate-500">Loading...</p>}
+              {auditLoading && <TableSkeleton rows={5} cols={5} />}
               {!auditLoading && auditError && <p className="text-sm text-red-600">{auditError}</p>}
               {!auditLoading && !auditError && auditEntries.length === 0 && (
                 <p className="text-sm text-slate-500">No admin actions recorded yet.</p>

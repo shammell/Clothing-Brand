@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState, type FormEvent, type SVGProps } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type SVGProps } from "react";
 import { upload } from "@vercel/blob/client";
 import { authenticatedFetch, extractErrorMessage } from "@/lib/auth-store";
+import { TableSkeleton } from "@/components/TableSkeleton";
+import { SortableTh } from "@/components/SortableTh";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
@@ -117,6 +119,26 @@ export function ProductManager({
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [sort, setSort] = useState<{ key: "name" | "category" | "price" | "stock"; direction: "asc" | "desc" }>({
+    key: "name",
+    direction: "asc",
+  });
+
+  const toggleSort = (key: typeof sort.key) => {
+    setSort((current) =>
+      current.key === key ? { key, direction: current.direction === "asc" ? "desc" : "asc" } : { key, direction: "asc" }
+    );
+  };
+
+  const sortedProducts = useMemo(() => {
+    const list = [...products];
+    const { key, direction } = sort;
+    list.sort((a, b) => {
+      const result = key === "price" || key === "stock" ? a[key] - b[key] : a[key].localeCompare(b[key]);
+      return direction === "asc" ? result : -result;
+    });
+    return list;
+  }, [products, sort]);
 
   const uploadImage = async (file: File) => {
     setUploading(true);
@@ -315,27 +337,35 @@ export function ProductManager({
             <IconRefresh className="h-4 w-4" />
           </button>
         </div>
-        {productsLoading && <p className="text-sm text-slate-500">Loading...</p>}
+        {productsLoading && <TableSkeleton rows={5} cols={4} />}
         {!productsLoading && productsError && <p className="text-sm text-red-600">{productsError}</p>}
         {!productsLoading && !productsError && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 text-left text-slate-500">
-                  <th className="py-2 pr-4 font-medium">Name</th>
-                  <th className="py-2 pr-4 font-medium">Category</th>
-                  <th className="py-2 pr-4 font-medium">Price</th>
-                  <th className="py-2 pr-4 font-medium">Stock</th>
+                  <SortableTh label="Name" active={sort.key === "name"} direction={sort.direction} onClick={() => toggleSort("name")} />
+                  <SortableTh label="Category" active={sort.key === "category"} direction={sort.direction} onClick={() => toggleSort("category")} />
+                  <SortableTh label="Price" active={sort.key === "price"} direction={sort.direction} onClick={() => toggleSort("price")} />
+                  <SortableTh label="Stock" active={sort.key === "stock"} direction={sort.direction} onClick={() => toggleSort("stock")} />
                   <th className="py-2 pr-4 font-medium" />
                 </tr>
               </thead>
               <tbody>
-                {products.map((product) => (
+                {sortedProducts.map((product) => (
                   <tr key={product.id} className="border-b border-slate-100 hover:bg-slate-50">
                     <td className="py-2.5 pr-4 text-slate-900">{product.name}</td>
                     <td className="py-2.5 pr-4 text-slate-600">{product.category}</td>
                     <td className="py-2.5 pr-4 text-slate-600">${product.price.toFixed(2)}</td>
-                    <td className="py-2.5 pr-4 text-slate-600">{product.stock}</td>
+                    <td className="py-2.5 pr-4">
+                      {product.stock === 0 ? (
+                        <span className="inline-flex items-center rounded-full bg-red-100 px-2.5 py-0.5 text-xs font-medium text-red-700">Out of stock</span>
+                      ) : product.stock < 5 ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-700">{product.stock} left</span>
+                      ) : (
+                        <span className="text-slate-600">{product.stock}</span>
+                      )}
+                    </td>
                     <td className="py-2.5 pr-4">
                       <div className="flex items-center gap-1 whitespace-nowrap">
                         <button
