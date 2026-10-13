@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode, type SVGProps } from "react";
 import {
   authenticatedFetch,
   extractErrorMessage,
@@ -84,8 +84,17 @@ const TAB_LABELS: Record<Tab, string> = {
   audit: "Audit log",
 };
 
-const inputClass = "border border-neutral-300 px-3 py-2 text-sm w-full";
-const cardClass = "bg-white border border-neutral-200 p-6";
+const inputClass =
+  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500";
+const cardClass = "bg-white rounded-xl border border-slate-200 shadow-sm p-6";
+const primaryButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors";
+const ghostButtonClass =
+  "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-60";
+const iconButtonClass =
+  "inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50";
+const selectClass =
+  "rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 disabled:opacity-60";
 
 function formatAction(action: string): string {
   return action.replace(/_/g, " ");
@@ -96,6 +105,151 @@ function formatDetails(details: Record<string, unknown>): string {
   if (entries.length === 0) return "—";
   return entries.map(([key, value]) => `${key.replace(/_/g, " ")}: ${String(value)}`).join(", ");
 }
+
+type BadgeTone = "neutral" | "green" | "red" | "amber" | "blue" | "purple";
+
+const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
+  neutral: "bg-slate-100 text-slate-700",
+  green: "bg-emerald-100 text-emerald-700",
+  red: "bg-red-100 text-red-700",
+  amber: "bg-amber-100 text-amber-700",
+  blue: "bg-blue-100 text-blue-700",
+  purple: "bg-purple-100 text-purple-700",
+};
+
+function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: BadgeTone }) {
+  return (
+    <span
+      className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${BADGE_TONE_CLASS[tone]}`}
+    >
+      {children}
+    </span>
+  );
+}
+
+const ORDER_STATUS_TONE: Record<string, BadgeTone> = {
+  placed: "blue",
+  processing: "amber",
+  shipped: "purple",
+  delivered: "green",
+  cancelled: "red",
+};
+
+const ROLE_TONE: Record<UserSummary["role"], BadgeTone> = {
+  admin: "purple",
+  lister: "blue",
+  customer: "neutral",
+};
+
+type IconProps = SVGProps<SVGSVGElement>;
+const iconDefaults = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
+
+function IconGrid(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <rect x="3" y="3" width="8" height="8" rx="1.5" />
+      <rect x="13" y="3" width="8" height="8" rx="1.5" />
+      <rect x="3" y="13" width="8" height="8" rx="1.5" />
+      <rect x="13" y="13" width="8" height="8" rx="1.5" />
+    </svg>
+  );
+}
+
+function IconBox(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
+      <path d="M3.5 7.5 12 12l8.5-4.5" />
+      <path d="M12 12v9" />
+    </svg>
+  );
+}
+
+function IconBag(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <path d="M6 7h12l1 13H5z" />
+      <path d="M9 7a3 3 0 0 1 6 0" />
+    </svg>
+  );
+}
+
+function IconUsers(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <circle cx="9" cy="8" r="3" />
+      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
+      <circle cx="17" cy="9" r="2.5" />
+      <path d="M15.5 14c2.5.3 4.5 2.5 4.5 6" />
+    </svg>
+  );
+}
+
+function IconClipboard(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <rect x="5" y="4" width="14" height="17" rx="2" />
+      <path d="M9 3h6v3H9z" />
+      <path d="M8 10h8M8 14h8M8 18h5" />
+    </svg>
+  );
+}
+
+function IconLogout(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
+      <path d="M16 16l4-4-4-4" />
+      <path d="M20 12H9" />
+    </svg>
+  );
+}
+
+function IconSearch(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="M20 20l-4.3-4.3" />
+    </svg>
+  );
+}
+
+function IconRefresh(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <path d="M3 11a9 9 0 0 1 15.3-5.3L21 8" />
+      <path d="M21 3v5h-5" />
+      <path d="M21 13a9 9 0 0 1-15.3 5.3L3 16" />
+      <path d="M3 21v-5h5" />
+    </svg>
+  );
+}
+
+function IconLock(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
+    </svg>
+  );
+}
+
+function IconUnlock(props: IconProps) {
+  return (
+    <svg {...iconDefaults} {...props}>
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V7a4 4 0 0 1 7-2.6" />
+    </svg>
+  );
+}
+
+const NAV_ICONS: Record<Tab, (props: IconProps) => ReactNode> = {
+  overview: IconGrid,
+  products: IconBox,
+  orders: IconBag,
+  users: IconUsers,
+  audit: IconClipboard,
+};
 
 export default function AdminPage() {
   const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
@@ -370,34 +524,42 @@ export default function AdminPage() {
 
   if (!currentUser) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
         <form
-          className="w-full max-w-sm space-y-4 bg-white p-8 shadow-sm border border-neutral-200"
+          className="w-full max-w-sm space-y-5 bg-white p-8 rounded-2xl shadow-sm border border-slate-200"
           onSubmit={(event) => { event.preventDefault(); login(); }}
         >
-          <h1 className="text-xl font-semibold text-neutral-900">Admin login</h1>
-          <input
-            type="email"
-            required
-            placeholder="Email address"
-            value={loginEmail}
-            onChange={(event) => setLoginEmail(event.target.value)}
-            className={inputClass}
-          />
-          <input
-            type="password"
-            required
-            placeholder="Password"
-            value={loginPassword}
-            onChange={(event) => setLoginPassword(event.target.value)}
-            className={inputClass}
-          />
+          <div className="space-y-1">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white font-semibold">T</div>
+            <p role="heading" aria-level={1} className="text-xl font-semibold text-slate-900 pt-2">Admin sign in</p>
+            <p className="text-sm text-slate-500">Thread&amp;Co administration</p>
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="admin-email" className="block text-sm font-medium text-slate-700">Email address</label>
+            <input
+              id="admin-email"
+              type="email"
+              required
+              placeholder="you@company.com"
+              value={loginEmail}
+              onChange={(event) => setLoginEmail(event.target.value)}
+              className={inputClass}
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="admin-password" className="block text-sm font-medium text-slate-700">Password</label>
+            <input
+              id="admin-password"
+              type="password"
+              required
+              placeholder="••••••••"
+              value={loginPassword}
+              onChange={(event) => setLoginPassword(event.target.value)}
+              className={inputClass}
+            />
+          </div>
           {loginError && <p className="text-sm text-red-600">{loginError}</p>}
-          <button
-            type="submit"
-            disabled={loginLoading}
-            className="w-full bg-neutral-900 text-white py-2 text-sm uppercase tracking-wide disabled:opacity-60"
-          >
+          <button type="submit" disabled={loginLoading} className={`${primaryButtonClass} w-full`}>
             {loginLoading ? "Signing in..." : "Sign in"}
           </button>
         </form>
@@ -407,303 +569,374 @@ export default function AdminPage() {
 
   if (!isAdminRole(role)) {
     return (
-      <main className="min-h-screen flex items-center justify-center bg-neutral-50 px-4">
-        <div className="text-center space-y-4">
-          <p className="text-neutral-700">Signed in as {currentUser}, but this account doesn&apos;t have admin access.</p>
-          <button onClick={logout} className="underline text-sm">Log out</button>
+      <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
+        <div className="text-center space-y-4 bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-sm">
+          <p className="text-slate-700">Signed in as {currentUser}, but this account doesn&apos;t have admin access.</p>
+          <button onClick={logout} className={ghostButtonClass}>Log out</button>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-neutral-50">
-      <header className="bg-neutral-900 text-white">
-        <div className="max-w-6xl mx-auto px-6 md:px-10 py-5 flex items-center justify-between">
-          <h1 className="text-xl font-semibold">Thread&amp;Co admin</h1>
-          <div className="flex items-center gap-4 text-sm text-neutral-300">
-            <span>Signed in as {currentUser}</span>
-            <button onClick={logout} className="underline text-white">Log out</button>
-          </div>
+    <div className="min-h-screen bg-slate-50 md:flex">
+      <aside className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col bg-white border-r border-slate-200">
+        <div className="flex h-16 items-center gap-2 px-6 border-b border-slate-200">
+          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-semibold text-white">T</span>
+          <span className="font-semibold text-slate-900">Thread&amp;Co</span>
         </div>
-        <nav className="max-w-6xl mx-auto px-6 md:px-10 flex gap-1 overflow-x-auto">
-          {TABS.map((item) => (
-            <button
-              key={item}
-              onClick={() => setTab(item)}
-              className={
-                tab === item
-                  ? "px-4 py-3 text-sm font-medium text-white border-b-2 border-white whitespace-nowrap"
-                  : "px-4 py-3 text-sm text-neutral-400 border-b-2 border-transparent hover:text-neutral-200 whitespace-nowrap"
-              }
-            >
-              {TAB_LABELS[item]}
-            </button>
-          ))}
+        <nav className="flex-1 space-y-1 px-3 py-4">
+          {TABS.map((item) => {
+            const Icon = NAV_ICONS[item];
+            const active = tab === item;
+            return (
+              <button
+                key={item}
+                onClick={() => setTab(item)}
+                className={
+                  active
+                    ? "flex w-full items-center gap-3 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700"
+                    : "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
+                }
+              >
+                <Icon className="h-5 w-5 shrink-0" />
+                {TAB_LABELS[item]}
+              </button>
+            );
+          })}
         </nav>
-      </header>
+        <div className="border-t border-slate-200 px-3 py-4">
+          <p className="truncate px-3 text-xs text-slate-500">Signed in as</p>
+          <p className="mb-2 truncate px-3 text-sm font-medium text-slate-900">{currentUser}</p>
+          <button onClick={logout} className={`${ghostButtonClass} w-full`}>
+            <IconLogout className="h-4 w-4" />
+            Log out
+          </button>
+        </div>
+      </aside>
 
-      <div className="max-w-6xl mx-auto px-6 md:px-10 py-8 space-y-8">
-        {tab === "overview" && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <StatCard label="Revenue" value={`$${stats.revenue.toFixed(2)}`} />
-              <StatCard label="Orders" value={orders.length} sub={`${stats.openOrders} open`} />
-              <StatCard label="Users" value={users.length} sub={`${stats.blockedUsers} blocked`} />
-              <StatCard label="Products" value={productCount ?? "—"} />
+      <div className="flex-1 md:ml-64">
+        <header className="sticky top-0 z-10 bg-white border-b border-slate-200">
+          <div className="flex h-16 items-center justify-between px-4 md:px-8">
+            <p role="heading" aria-level={1} className="text-lg font-semibold text-slate-900">{TAB_LABELS[tab]}</p>
+            <div className="flex items-center gap-3 text-sm text-slate-500 md:hidden">
+              <span className="max-w-[120px] truncate">{currentUser}</span>
+              <button onClick={logout} className={iconButtonClass} title="Log out">
+                <IconLogout className="h-5 w-5" />
+              </button>
             </div>
-
-            <section className={cardClass}>
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-medium text-neutral-900">Recent orders</h2>
-                <button onClick={() => setTab("orders")} className="text-sm underline">View all</button>
-              </div>
-              {ordersLoading && <p className="text-sm text-neutral-500">Loading...</p>}
-              {!ordersLoading && orders.length === 0 && <p className="text-sm text-neutral-500">No orders yet.</p>}
-              {!ordersLoading && orders.length > 0 && (
-                <ul className="divide-y divide-neutral-100 text-sm">
-                  {orders.slice(0, 5).map((order) => (
-                    <li key={order.id} className="py-2 flex items-center justify-between gap-3">
-                      <span className="text-neutral-700">
-                        {order.shipping_address?.full_name ?? "Unknown"} · {new Date(order.created_at).toLocaleDateString()}
-                      </span>
-                      <span className="flex items-center gap-3">
-                        <span className="uppercase text-xs tracking-wide text-neutral-500">{order.status}</span>
-                        <span className="font-medium">${order.total.toFixed(2)}</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
           </div>
-        )}
+          <nav className="flex gap-1 overflow-x-auto border-t border-slate-100 px-4 md:hidden">
+            {TABS.map((item) => (
+              <button
+                key={item}
+                onClick={() => setTab(item)}
+                className={
+                  tab === item
+                    ? "whitespace-nowrap border-b-2 border-indigo-600 px-3 py-2.5 text-sm font-medium text-indigo-700"
+                    : "whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm text-slate-500 hover:text-slate-900"
+                }
+              >
+                {TAB_LABELS[item]}
+              </button>
+            ))}
+          </nav>
+        </header>
 
-        {tab === "products" && (
-          <ProductManager
-            authToken={authToken}
-            onSessionExpired={logout}
-            onProductsChange={(products: Product[]) => setProductCount(products.length)}
-          />
-        )}
-
-        {tab === "orders" && (
-          <section className={cardClass}>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="text-lg font-medium text-neutral-900">Orders ({filteredOrders.length})</h2>
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  placeholder="Search by order id or name"
-                  value={orderSearch}
-                  onChange={(event) => setOrderSearch(event.target.value)}
-                  className="border border-neutral-300 px-3 py-1.5 text-sm"
-                />
-                <select
-                  value={orderStatusFilter}
-                  onChange={(event) => setOrderStatusFilter(event.target.value as typeof orderStatusFilter)}
-                  className="border border-neutral-300 px-2 py-1.5 text-sm"
-                >
-                  {ORDER_FILTERS.map((status) => (
-                    <option key={status} value={status}>{status === "all" ? "All statuses" : status}</option>
-                  ))}
-                </select>
-                <button onClick={loadOrders} className="text-sm underline">Refresh</button>
+        <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-8 md:py-8">
+          {tab === "overview" && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
+                <StatCard icon={IconBag} label="Revenue" value={`$${stats.revenue.toFixed(2)}`} />
+                <StatCard icon={IconBox} label="Orders" value={orders.length} sub={`${stats.openOrders} open`} />
+                <StatCard icon={IconUsers} label="Users" value={users.length} sub={`${stats.blockedUsers} blocked`} />
+                <StatCard icon={IconGrid} label="Products" value={productCount ?? "—"} />
               </div>
+
+              <section className={cardClass}>
+                <div className="mb-4 flex items-center justify-between">
+                  <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Recent orders</p>
+                  <button onClick={() => setTab("orders")} className={ghostButtonClass}>View all</button>
+                </div>
+                {ordersLoading && <p className="text-sm text-slate-500">Loading...</p>}
+                {!ordersLoading && orders.length === 0 && <p className="text-sm text-slate-500">No orders yet.</p>}
+                {!ordersLoading && orders.length > 0 && (
+                  <ul className="divide-y divide-slate-100 text-sm">
+                    {orders.slice(0, 5).map((order) => (
+                      <li key={order.id} className="flex items-center justify-between gap-3 py-3">
+                        <span className="text-slate-700">
+                          {order.shipping_address?.full_name ?? "Unknown"} · {new Date(order.created_at).toLocaleDateString()}
+                        </span>
+                        <span className="flex items-center gap-3">
+                          <Badge tone={ORDER_STATUS_TONE[order.status] ?? "neutral"}>{order.status}</Badge>
+                          <span className="font-medium text-slate-900">${order.total.toFixed(2)}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </section>
             </div>
-            {ordersLoading && <p className="text-sm text-neutral-500">Loading...</p>}
-            {!ordersLoading && ordersError && <p className="text-sm text-red-600">{ordersError}</p>}
-            {!ordersLoading && !ordersError && orderActionError && (
-              <p className="text-sm text-red-600 mb-3">{orderActionError}</p>
-            )}
-            {!ordersLoading && !ordersError && filteredOrders.length === 0 && (
-              <p className="text-sm text-neutral-500">{orders.length === 0 ? "No orders yet." : "No orders match your filters."}</p>
-            )}
-            {!ordersLoading && !ordersError && filteredOrders.length > 0 && (
-              <div className="space-y-4">
-                {filteredOrders.map((order) => (
-                  <div key={order.id} className="border border-neutral-200 p-4 text-sm">
-                    <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
-                      <div>
-                        <span className="text-neutral-500">{new Date(order.created_at).toLocaleString()}</span>
-                        {order.shipping_address && (
-                          <span className="ml-3 text-neutral-700">
-                            {order.shipping_address.full_name} · {order.shipping_address.city}, {order.shipping_address.country}
-                          </span>
-                        )}
-                      </div>
-                      <select
-                        value={order.status}
-                        disabled={updatingOrderId === order.id}
-                        onChange={(event) => updateOrderStatus(order.id, event.target.value)}
-                        className="border border-neutral-300 px-2 py-1 text-sm disabled:opacity-60"
-                      >
-                        {ORDER_STATUSES.map((status) => (
-                          <option key={status} value={status}>{status}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <ul className="space-y-1 mb-2">
-                      {order.items.map((item) => (
-                        <li key={`${item.product_id}-${item.size}-${item.color}`} className="flex justify-between text-neutral-700">
-                          <span>{item.quantity}× {item.name} ({item.size}{item.color ? `, ${item.color}` : ""})</span>
-                          <span>${item.subtotal.toFixed(2)}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="flex justify-between font-medium border-t border-neutral-100 pt-2">
-                      <span>Total</span>
-                      <span>${order.total.toFixed(2)}</span>
-                    </div>
+          )}
+
+          {tab === "products" && (
+            <ProductManager
+              authToken={authToken}
+              onSessionExpired={logout}
+              onProductsChange={(products: Product[]) => setProductCount(products.length)}
+            />
+          )}
+
+          {tab === "orders" && (
+            <section className={cardClass}>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Orders ({filteredOrders.length})</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative">
+                    <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      placeholder="Search by order id or name"
+                      value={orderSearch}
+                      onChange={(event) => setOrderSearch(event.target.value)}
+                      className={`${inputClass} w-56 pl-8`}
+                    />
                   </div>
-                ))}
+                  <select
+                    value={orderStatusFilter}
+                    onChange={(event) => setOrderStatusFilter(event.target.value as typeof orderStatusFilter)}
+                    className={selectClass}
+                  >
+                    {ORDER_FILTERS.map((status) => (
+                      <option key={status} value={status}>{status === "all" ? "All statuses" : status}</option>
+                    ))}
+                  </select>
+                  <button onClick={loadOrders} className={iconButtonClass} title="Refresh orders">
+                    <IconRefresh className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            )}
-          </section>
-        )}
-
-        {tab === "users" && (
-          <section className={cardClass}>
-            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-              <h2 className="text-lg font-medium text-neutral-900">Users ({filteredUsers.length})</h2>
-              <div className="flex flex-wrap items-center gap-3">
-                <input
-                  placeholder="Search by username or email"
-                  value={userSearch}
-                  onChange={(event) => setUserSearch(event.target.value)}
-                  className="border border-neutral-300 px-3 py-1.5 text-sm"
-                />
-                <select
-                  value={userRoleFilter}
-                  onChange={(event) => setUserRoleFilter(event.target.value as typeof userRoleFilter)}
-                  className="border border-neutral-300 px-2 py-1.5 text-sm"
-                >
-                  {USER_ROLE_FILTERS.map((roleOption) => (
-                    <option key={roleOption} value={roleOption}>{roleOption === "all" ? "All roles" : roleOption}</option>
-                  ))}
-                </select>
-                <button onClick={loadUsers} className="text-sm underline">Refresh</button>
-              </div>
-            </div>
-            {usersLoading && <p className="text-sm text-neutral-500">Loading...</p>}
-            {!usersLoading && usersError && <p className="text-sm text-red-600">{usersError}</p>}
-            {!usersLoading && !usersError && userActionError && (
-              <p className="text-sm text-red-600 mb-3">{userActionError}</p>
-            )}
-            {!usersLoading && !usersError && filteredUsers.length === 0 && (
-              <p className="text-sm text-neutral-500">{users.length === 0 ? "No users yet." : "No users match your filters."}</p>
-            )}
-            {!usersLoading && !usersError && filteredUsers.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-neutral-500 border-b border-neutral-200">
-                      <th className="py-2 pr-4">Username</th>
-                      <th className="py-2 pr-4">Email</th>
-                      <th className="py-2 pr-4">Role</th>
-                      <th className="py-2 pr-4">Status</th>
-                      <th className="py-2 pr-4" />
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id} className="border-b border-neutral-100">
-                        <td className="py-2 pr-4">{user.username}</td>
-                        <td className="py-2 pr-4">{user.email}</td>
-                        <td className="py-2 pr-4">
+              {ordersLoading && <p className="text-sm text-slate-500">Loading...</p>}
+              {!ordersLoading && ordersError && <p className="text-sm text-red-600">{ordersError}</p>}
+              {!ordersLoading && !ordersError && orderActionError && (
+                <p className="mb-3 text-sm text-red-600">{orderActionError}</p>
+              )}
+              {!ordersLoading && !ordersError && filteredOrders.length === 0 && (
+                <p className="text-sm text-slate-500">{orders.length === 0 ? "No orders yet." : "No orders match your filters."}</p>
+              )}
+              {!ordersLoading && !ordersError && filteredOrders.length > 0 && (
+                <div className="space-y-4">
+                  {filteredOrders.map((order) => (
+                    <div key={order.id} className="rounded-xl border border-slate-200 p-4 text-sm">
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-3">
+                          <span className="text-slate-500">{new Date(order.created_at).toLocaleString()}</span>
+                          {order.shipping_address && (
+                            <span className="text-slate-700">
+                              {order.shipping_address.full_name} · {order.shipping_address.city}, {order.shipping_address.country}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge tone={ORDER_STATUS_TONE[order.status] ?? "neutral"}>{order.status}</Badge>
                           <select
-                            value={user.role}
-                            disabled={updatingUserId === user.id}
-                            onChange={(event) => {
-                              const nextRole = event.target.value;
-                              if (nextRole === user.role) return;
-                              if (!window.confirm(`Change ${user.username}'s role to "${nextRole}"?`)) return;
-                              updateUserRole(user.id, nextRole);
-                            }}
-                            className="border border-neutral-300 px-2 py-1 text-sm disabled:opacity-60"
+                            value={order.status}
+                            disabled={updatingOrderId === order.id}
+                            onChange={(event) => updateOrderStatus(order.id, event.target.value)}
+                            className={selectClass}
                           >
-                            {ROLES.map((roleOption) => (
-                              <option key={roleOption} value={roleOption}>{roleOption}</option>
+                            {ORDER_STATUSES.map((status) => (
+                              <option key={status} value={status}>{status}</option>
                             ))}
                           </select>
-                        </td>
-                        <td className="py-2 pr-4">
-                          <span className={user.is_blocked ? "text-red-600 font-medium" : "text-neutral-500"}>
-                            {user.is_blocked ? "Blocked" : "Active"}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4">
-                          <button
-                            onClick={() => {
-                              const next = !user.is_blocked;
-                              const verb = next ? "Block" : "Unblock";
-                              if (!window.confirm(`${verb} ${user.username}?`)) return;
-                              updateUserBlock(user.id, next);
-                            }}
-                            disabled={updatingUserId === user.id}
-                            className="underline disabled:opacity-60"
-                          >
-                            {user.is_blocked ? "Unblock" : "Block"}
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
-        )}
+                        </div>
+                      </div>
+                      <ul className="mb-2 space-y-1">
+                        {order.items.map((item) => (
+                          <li key={`${item.product_id}-${item.size}-${item.color}`} className="flex justify-between text-slate-700">
+                            <span>{item.quantity}× {item.name} ({item.size}{item.color ? `, ${item.color}` : ""})</span>
+                            <span>${item.subtotal.toFixed(2)}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="flex justify-between border-t border-slate-100 pt-2 font-medium text-slate-900">
+                        <span>Total</span>
+                        <span>${order.total.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+          )}
 
-        {tab === "audit" && (
-          <section className={cardClass}>
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-lg font-medium text-neutral-900">Audit log</h2>
-              <button onClick={loadAuditLog} className="text-sm underline">Refresh</button>
-            </div>
-            {auditLoading && <p className="text-sm text-neutral-500">Loading...</p>}
-            {!auditLoading && auditError && <p className="text-sm text-red-600">{auditError}</p>}
-            {!auditLoading && !auditError && auditEntries.length === 0 && (
-              <p className="text-sm text-neutral-500">No admin actions recorded yet.</p>
-            )}
-            {!auditLoading && !auditError && auditEntries.length > 0 && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="text-left text-neutral-500 border-b border-neutral-200">
-                      <th className="py-2 pr-4">When</th>
-                      <th className="py-2 pr-4">Actor</th>
-                      <th className="py-2 pr-4">Action</th>
-                      <th className="py-2 pr-4">Target</th>
-                      <th className="py-2 pr-4">Details</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditEntries.map((entry) => (
-                      <tr key={entry.id} className="border-b border-neutral-100 align-top">
-                        <td className="py-2 pr-4 whitespace-nowrap text-neutral-500">{new Date(entry.created_at).toLocaleString()}</td>
-                        <td className="py-2 pr-4">{usernameById.get(entry.actor_id) ?? entry.actor_id}</td>
-                        <td className="py-2 pr-4 capitalize">{formatAction(entry.action)}</td>
-                        <td className="py-2 pr-4">{usernameById.get(entry.target_user_id) ?? entry.target_user_id}</td>
-                        <td className="py-2 pr-4 text-neutral-600">{formatDetails(entry.details)}</td>
-                      </tr>
+          {tab === "users" && (
+            <section className={cardClass}>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+                <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Users ({filteredUsers.length})</p>
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="relative">
+                    <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                    <input
+                      placeholder="Search by username or email"
+                      value={userSearch}
+                      onChange={(event) => setUserSearch(event.target.value)}
+                      className={`${inputClass} w-56 pl-8`}
+                    />
+                  </div>
+                  <select
+                    value={userRoleFilter}
+                    onChange={(event) => setUserRoleFilter(event.target.value as typeof userRoleFilter)}
+                    className={selectClass}
+                  >
+                    {USER_ROLE_FILTERS.map((roleOption) => (
+                      <option key={roleOption} value={roleOption}>{roleOption === "all" ? "All roles" : roleOption}</option>
                     ))}
-                  </tbody>
-                </table>
+                  </select>
+                  <button onClick={loadUsers} className={iconButtonClass} title="Refresh users">
+                    <IconRefresh className="h-4 w-4" />
+                  </button>
+                </div>
               </div>
-            )}
-          </section>
-        )}
+              {usersLoading && <p className="text-sm text-slate-500">Loading...</p>}
+              {!usersLoading && usersError && <p className="text-sm text-red-600">{usersError}</p>}
+              {!usersLoading && !usersError && userActionError && (
+                <p className="mb-3 text-sm text-red-600">{userActionError}</p>
+              )}
+              {!usersLoading && !usersError && filteredUsers.length === 0 && (
+                <p className="text-sm text-slate-500">{users.length === 0 ? "No users yet." : "No users match your filters."}</p>
+              )}
+              {!usersLoading && !usersError && filteredUsers.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                        <th className="py-2 pr-4 font-medium">Username</th>
+                        <th className="py-2 pr-4 font-medium">Email</th>
+                        <th className="py-2 pr-4 font-medium">Role</th>
+                        <th className="py-2 pr-4 font-medium">Status</th>
+                        <th className="py-2 pr-4 font-medium" />
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredUsers.map((user) => (
+                        <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
+                          <td className="py-2.5 pr-4 text-slate-900">{user.username}</td>
+                          <td className="py-2.5 pr-4 text-slate-600">{user.email}</td>
+                          <td className="py-2.5 pr-4">
+                            <div className="flex items-center gap-2">
+                              <Badge tone={ROLE_TONE[user.role]}>{user.role}</Badge>
+                              <select
+                                value={user.role}
+                                disabled={updatingUserId === user.id}
+                                onChange={(event) => {
+                                  const nextRole = event.target.value;
+                                  if (nextRole === user.role) return;
+                                  if (!window.confirm(`Change ${user.username}'s role to "${nextRole}"?`)) return;
+                                  updateUserRole(user.id, nextRole);
+                                }}
+                                className={selectClass}
+                              >
+                                {ROLES.map((roleOption) => (
+                                  <option key={roleOption} value={roleOption}>{roleOption}</option>
+                                ))}
+                              </select>
+                            </div>
+                          </td>
+                          <td className="py-2.5 pr-4">
+                            <Badge tone={user.is_blocked ? "red" : "green"}>{user.is_blocked ? "Blocked" : "Active"}</Badge>
+                          </td>
+                          <td className="py-2.5 pr-4">
+                            <button
+                              onClick={() => {
+                                const next = !user.is_blocked;
+                                const verb = next ? "Block" : "Unblock";
+                                if (!window.confirm(`${verb} ${user.username}?`)) return;
+                                updateUserBlock(user.id, next);
+                              }}
+                              disabled={updatingUserId === user.id}
+                              className={iconButtonClass}
+                              title={user.is_blocked ? "Unblock user" : "Block user"}
+                            >
+                              {user.is_blocked ? <IconUnlock className="h-4 w-4" /> : <IconLock className="h-4 w-4" />}
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {tab === "audit" && (
+            <section className={cardClass}>
+              <div className="mb-4 flex items-center justify-between">
+                <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Audit log</p>
+                <button onClick={loadAuditLog} className={iconButtonClass} title="Refresh audit log">
+                  <IconRefresh className="h-4 w-4" />
+                </button>
+              </div>
+              {auditLoading && <p className="text-sm text-slate-500">Loading...</p>}
+              {!auditLoading && auditError && <p className="text-sm text-red-600">{auditError}</p>}
+              {!auditLoading && !auditError && auditEntries.length === 0 && (
+                <p className="text-sm text-slate-500">No admin actions recorded yet.</p>
+              )}
+              {!auditLoading && !auditError && auditEntries.length > 0 && (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-slate-200 text-left text-slate-500">
+                        <th className="py-2 pr-4 font-medium">When</th>
+                        <th className="py-2 pr-4 font-medium">Actor</th>
+                        <th className="py-2 pr-4 font-medium">Action</th>
+                        <th className="py-2 pr-4 font-medium">Target</th>
+                        <th className="py-2 pr-4 font-medium">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {auditEntries.map((entry) => (
+                        <tr key={entry.id} className="border-b border-slate-100 align-top hover:bg-slate-50">
+                          <td className="whitespace-nowrap py-2.5 pr-4 text-slate-500">{new Date(entry.created_at).toLocaleString()}</td>
+                          <td className="py-2.5 pr-4 text-slate-900">{usernameById.get(entry.actor_id) ?? entry.actor_id}</td>
+                          <td className="py-2.5 pr-4"><Badge>{formatAction(entry.action)}</Badge></td>
+                          <td className="py-2.5 pr-4 text-slate-900">{usernameById.get(entry.target_user_id) ?? entry.target_user_id}</td>
+                          <td className="py-2.5 pr-4 text-slate-600">{formatDetails(entry.details)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+        </div>
       </div>
-    </main>
+    </div>
   );
 }
 
-function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  sub,
+}: {
+  icon: (props: IconProps) => ReactNode;
+  label: string;
+  value: string | number;
+  sub?: string;
+}) {
   return (
     <div className={cardClass}>
-      <p className="text-xs uppercase tracking-wide text-neutral-500">{label}</p>
-      <p className="text-2xl font-semibold text-neutral-900 mt-1">{value}</p>
-      {sub && <p className="text-xs text-neutral-500 mt-1">{sub}</p>}
+      <div className="flex items-center justify-between">
+        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+          <Icon className="h-4 w-4" />
+        </span>
+      </div>
+      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
     </div>
   );
 }
