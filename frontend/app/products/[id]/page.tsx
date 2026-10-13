@@ -3,6 +3,7 @@
 import { useParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { subscribeToStorage } from "@/lib/auth-store";
+import { CompleteTheLook } from "@/components/CompleteTheLook";
 import { ColorSelector } from "@/components/ColorSelector";
 import { ProductImage } from "@/components/ProductImage";
 import { FindMySize } from "@/components/FindMySize";
@@ -110,6 +111,7 @@ export default function ProductDetailPage() {
           </div>
         </section>
       )}
+      {!loading && !loadError && product && <CompleteTheLook key={product.id} productId={product.id} />}
       <SiteFooter />
     </main>
   );

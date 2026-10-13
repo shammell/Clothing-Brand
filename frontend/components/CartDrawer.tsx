@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useSyncExternalStore } from "react";
+import { PairsWellWith } from "@/components/CompleteTheLook";
 import { ProductImage } from "@/components/ProductImage";
 import { useCart } from "@/lib/useCart";
 import { closeCartDrawer, getUiServerSnapshot, getUiSnapshot, subscribeToUi } from "@/lib/ui-store";
@@ -70,6 +71,7 @@ export function CartDrawer() {
               </div>
             ))}
           </div>
+          <PairsWellWith cart={cart} />
           <div className="drawer-footer">
             <div className="drawer-subtotal"><span>Subtotal</span><b key={cartTotal} className="fade-in">${cartTotal.toFixed(2)}</b></div>
             <button
