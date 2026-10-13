@@ -1,6 +1,8 @@
 @import "tailwindcss";
 
-:root { --ink:#25221f; --cream:#f7f4ef; --muted:#8f8981; --line:#ded9d1; --accent:#c56f4d; }
+:root { --ink:#25221f; --cream:#f7f4ef; --muted:#8f8981; --line:#ded9d1; --accent:#c56f4d;
+  --dur-fast:150ms; --dur-base:250ms; --dur-slow:400ms;
+  --ease-out:cubic-bezier(.22,1,.36,1); --ease-in-out:cubic-bezier(.65,0,.35,1); }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; overflow-x:hidden; }
 body { margin:0; background:var(--cream); color:var(--ink); font-family:Arial, Helvetica, sans-serif; }
@@ -50,12 +52,12 @@ h1 em,h2 em { color:var(--accent); font-style:italic; }
 .section-heading > span { color:var(--muted); font-size:11px; }
 .product-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:30px 18px; }
 .product-image { height:380px; overflow:hidden; position:relative; background:#e7e2dc; }
-.product-image img { width:100%; height:100%; object-fit:cover; transition:transform .5s; }
+.product-image img { width:100%; height:100%; object-fit:cover; transition:transform var(--dur-slow) var(--ease-out); }
 .product-card:hover .product-image img { transform:scale(1.04); }
 .badge { position:absolute; z-index:1; left:13px; top:13px; background:white; color:var(--accent); padding:7px 10px; font-size:9px; text-transform:uppercase; letter-spacing:.1em; }
 .heart { position:absolute; right:14px; top:10px; background:white; border:0; width:31px; height:31px; border-radius:50%; font-size:20px; color:var(--ink); }
 .heart.active { color:var(--accent); }
-.quick-add { position:absolute; bottom:0; left:0; right:0; border:0; background:#25221fe8; color:white; padding:15px; text-transform:uppercase; letter-spacing:.13em; font-size:10px; transform:translateY(100%); transition:transform .25s; }
+.quick-add { position:absolute; bottom:0; left:0; right:0; border:0; background:#25221fe8; color:white; padding:15px; text-transform:uppercase; letter-spacing:.13em; font-size:10px; transform:translateY(100%); transition:transform var(--dur-base) var(--ease-out); }
 .quick-add span { float:right; color:#e08a69; font-size:16px; line-height:8px; }
 .product-card:hover .quick-add { transform:translateY(0); }
 /* Stay visible through the adding/added feedback cycle even if the pointer
@@ -194,14 +196,14 @@ footer div { display:flex; gap:20px; }
 /* Micro-interactions (hover/press feedback) - applied via class, not
    copy-pasted per component. Kept to transform/box-shadow only so it
    never affects layout (no width/height/margin transitions). */
-.interactive { transition: transform 150ms ease, box-shadow 150ms ease; }
+.interactive { transition: transform var(--dur-fast) var(--ease-out), box-shadow var(--dur-fast) var(--ease-out); }
 .interactive:hover { transform: scale(1.02); }
 .interactive:active { transform: scale(0.98); }
 
 /* Scroll-reveal: starts hidden/offset, animates in once useInViewport
    flips isVisible. Elements above the fold never get this class, so
    nothing is invisible on first paint. */
-.reveal { opacity: 0; transform: translateY(16px); transition: opacity 400ms ease, transform 400ms ease; }
+.reveal { opacity: 0; transform: translateY(16px); transition: opacity var(--dur-slow) var(--ease-out), transform var(--dur-slow) var(--ease-out); }
 .reveal.is-visible { opacity: 1; transform: translateY(0); }
 
 /* One-shot cart icon feedback when an item is added - class is applied
@@ -222,3 +224,10 @@ footer div { display:flex; gap:20px; }
    no feedback" on /login, /register, /checkout, /checkout/payment. */
 .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin 600ms linear infinite; margin-right: 6px; vertical-align: -1px; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* One switch for all non-essential motion. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+  .reveal { opacity: 1; transform: none; }
+}
