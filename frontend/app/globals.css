@@ -140,6 +140,19 @@ footer div { display:flex; gap:20px; }
 .chat-header button,.drawer-heading button { background:none; border:0; color:inherit; font-size:22px; }
 .chat-body { padding:18px; background:#faf8f5; min-height:170px; }
 .chat-messages { display:flex; flex-direction:column; gap:10px; max-height:280px; overflow-y:auto; padding-right:3px; }
+.chat-window { animation:chat-in var(--dur-base) var(--ease-out); transform-origin:bottom right; }
+@keyframes chat-in { from { opacity:0; transform:translateY(12px); } }
+.chat-turn { display:flex; flex-direction:column; gap:8px; }
+.chat-cards { display:flex; gap:8px; overflow-x:auto; }
+.chat-card { flex:0 0 96px; display:flex; flex-direction:column; gap:4px; color:var(--ink); text-decoration:none; font-size:10px; }
+.chat-card img { width:96px; height:120px; object-fit:cover; background:#e7e2dc; }
+.chat-card b { font-weight:normal; color:var(--muted); }
+.typing { display:flex; gap:4px; }
+.typing i { width:6px; height:6px; border-radius:50%; background:var(--muted); animation:typing-pulse 1s ease-in-out infinite; }
+.typing i:nth-child(2) { animation-delay:.15s; }
+.typing i:nth-child(3) { animation-delay:.3s; }
+@keyframes typing-pulse { 50% { opacity:.25; transform:translateY(-2px); } }
+.chat-error button { border:0; background:none; color:var(--accent); text-decoration:underline; padding:0; font-size:inherit; }
 .bot-message { background:white; padding:13px; font-size:12px; line-height:1.6; border-radius:2px 12px 12px 12px; }
 .user-message { align-self:flex-end; max-width:85%; background:var(--accent); color:white; padding:13px; font-size:12px; line-height:1.6; border-radius:12px 2px 12px 12px; white-space:pre-wrap; }
 .bot-message { white-space:pre-wrap; }
@@ -213,7 +226,7 @@ html:has(dialog[open]) { overflow:hidden; scrollbar-gutter:stable; }
   .category-strip { display:block; padding:25px 24px; }.category-list { gap:14px; overflow-x:auto; margin-top:15px; }
   .products-section { padding:55px 24px 70px; }.product-grid { grid-template-columns:repeat(2,1fr); gap:25px 10px; }
   .product-info h3 { font-size:14px; }.story-banner { grid-template-columns:1fr; padding:65px 24px; gap:35px; }.story-banner h2 { font-size:48px; }
-  footer { flex-direction:column; gap:18px; align-items:flex-start; }.chat-window { right:15px; bottom:75px; }.chat-fab { right:15px; }
+  footer { flex-direction:column; gap:18px; align-items:flex-start; }.chat-window { right:15px; bottom:75px; width:min(calc(100vw - 30px), 360px); }.chat-fab { right:15px; }
   /* Stacked layout puts the link row at the very bottom of the page,
      same spot the fixed fab floats - the desktop fix (right padding)
      doesn't apply here since nothing is side-by-side anymore, so this

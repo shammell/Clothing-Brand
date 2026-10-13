@@ -22,40 +22,12 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 
 const categories = ["All", "T-Shirts", "Jeans", "Dresses", "Hoodies", "Shoes", "Shirts"];
 
-type ChatMessage = { role: "user" | "assistant"; content: string };
-const CHAT_STORAGE_KEY = "threadco_chat_history";
-const INITIAL_CHAT_MESSAGE: ChatMessage = {
-  role: "assistant",
-  content: "Hi! I'm here to help you find your perfect style. What are you looking for today?",
-};
-
-function loadChatHistory(): ChatMessage[] {
-  if (typeof window === "undefined") return [INITIAL_CHAT_MESSAGE];
-  try {
-    const stored = JSON.parse(localStorage.getItem(CHAT_STORAGE_KEY) ?? "null");
-    if (!Array.isArray(stored)) return [INITIAL_CHAT_MESSAGE];
-    const valid = stored.filter(
-      (message): message is ChatMessage =>
-        (message?.role === "user" || message?.role === "assistant") &&
-        typeof message.content === "string" &&
-        message.content.trim().length > 0,
-    );
-    return valid.length ? valid : [INITIAL_CHAT_MESSAGE];
-  } catch {
-    return [INITIAL_CHAT_MESSAGE];
-  }
-}
-
 export default function Home() {
   const [activeCategory, setActiveCategory] = useState("All");
   const [query, setQuery] = useState("");
   const [catalog, setCatalog] = useState<Product[]>([]);
   const addToCartApi = useAddToCart();
   const wishlist = useSyncExternalStore(subscribeToStorage, getWishlistSnapshot, getWishlistServerSnapshot);
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatInput, setChatInput] = useState("");
-  const [chatHistory, setChatHistory] = useState<ChatMessage[]>(loadChatHistory);
-  const [chatLoading, setChatLoading] = useState(false);
   const [productsLoading, setProductsLoading] = useState(true);
   const [productsError, setProductsError] = useState(false);
 
@@ -67,10 +39,6 @@ export default function Home() {
   // pattern it recognizes as safe.
   const { ref: newBannerRef, isVisible: newBannerVisible } = useInViewport<HTMLDivElement>();
   const { ref: aboutBannerRef, isVisible: aboutBannerVisible } = useInViewport<HTMLDivElement>();
-
-  useEffect(() => {
-    localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(chatHistory.slice(-20)));
-  }, [chatHistory]);
 
   const loadProducts = () => {
     setProductsLoading(true);
@@ -105,45 +73,6 @@ export default function Home() {
       ),
     [activeCategory, query, catalog],
   );
-
-  const sendChat = async () => {
-    const message = chatInput.trim();
-    if (!message || chatLoading) return;
-    setChatInput("");
-    setChatLoading(true);
-    const requestHistory = chatHistory.slice(-19);
-    setChatHistory((history) => [
-      ...history.slice(-18),
-      { role: "user", content: message },
-    ]);
-    try {
-      const response = await fetch(`${API_BASE}/chat/`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ message, history: requestHistory }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setChatHistory((history) => [
-          ...history,
-          { role: "assistant", content: "Sorry, the style assistant is unavailable right now." },
-        ]);
-        return;
-      }
-      const reply = typeof data.reply === "string" ? data.reply : "Sorry, I could not understand that response.";
-      setChatHistory((history) => [
-        ...history.slice(-18),
-        { role: "assistant", content: reply },
-      ]);
-    } catch {
-      setChatHistory((history) => [
-        ...history,
-        { role: "assistant", content: "Sorry, I could not connect to the style assistant." },
-      ]);
-    } finally {
-      setChatLoading(false);
-    }
-  };
 
   return (
     <main className="store-shell">
@@ -221,10 +150,8 @@ export default function Home() {
         <p>We believe getting dressed should feel effortless. That&apos;s why we create versatile pieces with considered details, honest materials, and a little room for your personality.</p>
       </section>
 
-      <SiteFooter hasChatFab />
+      <SiteFooter />
 
-      <button className="chat-fab" onClick={() => setChatOpen(!chatOpen)} aria-label="Open style assistant">✦ <span>Style assistant</span></button>
-      {chatOpen && <div className="chat-window"><div className="chat-header"><span><b>✦</b> Thread&Co assistant</span><button onClick={() => setChatOpen(false)}>×</button></div><div className="chat-body"><div className="chat-messages">{chatHistory.map((message, index) => <div className={message.role === "user" ? "user-message" : "bot-message"} key={`${message.role}-${index}`}>{message.content}</div>)}{chatLoading && <div className="bot-message">Finding the best style for you...</div>}</div><div className="chat-suggestions"><button onClick={() => setChatInput("Help me find an outfit")}>Help me find an outfit</button><button onClick={() => setChatInput("What's new?")}>What&apos;s new?</button></div></div><div className="chat-input"><input value={chatInput} onChange={(event) => setChatInput(event.target.value)} onKeyDown={(event) => event.key === "Enter" && sendChat()} placeholder="Ask me anything..." /><button onClick={sendChat}>↑</button></div></div>}
     </main>
   );
 }
