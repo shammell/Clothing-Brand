@@ -33,7 +33,7 @@ export function ProductCard({
       <div className="product-image">
         {product.badge && <span className="badge">{product.badge}</span>}
         <Link href={`/products/${product.id}`}>
-          <ProductImage src={product.image} alt={product.name} />
+          <ProductImage src={product.image} alt={product.name} transitionName={`product-image-${product.id}`} />
         </Link>
         <button
           className={wishlist.includes(product.id) ? "heart active" : "heart"}

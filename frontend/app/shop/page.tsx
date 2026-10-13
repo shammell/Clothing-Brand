@@ -12,6 +12,7 @@ import {
   productFromApi,
   toggleWishlist,
 } from "@/lib/shop-store";
+import { cacheProducts } from "@/lib/product-cache";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { ProductGridSkeleton } from "@/components/Skeletons";
 
@@ -34,7 +35,11 @@ export default function ShopPage() {
     setLoadError("");
     fetch(`${API_BASE}/products/`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Products unavailable"))))
-      .then((data: Array<Record<string, unknown>>) => setCatalog(data.map(productFromApi)))
+      .then((data: Array<Record<string, unknown>>) => {
+        const loaded = data.map(productFromApi);
+        cacheProducts(loaded);
+        setCatalog(loaded);
+      })
       .catch(() => setLoadError("Products unavailable."))
       .finally(() => setLoading(false));
   }, []);

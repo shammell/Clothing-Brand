@@ -10,6 +10,7 @@ import {
   productFromApi,
   toggleWishlist,
 } from "@/lib/shop-store";
+import { cacheProducts } from "@/lib/product-cache";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { ProductCard } from "@/components/ProductCard";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -77,7 +78,9 @@ export default function Home() {
     fetch(`${API_BASE}/products/`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Products unavailable"))))
       .then((data: Array<Record<string, unknown>>) => {
-        setCatalog(data.map(productFromApi));
+        const loaded = data.map(productFromApi);
+        cacheProducts(loaded);
+        setCatalog(loaded);
       })
       // A failed fetch surfaces a retry banner instead of silently keeping
       // whatever was in `catalog` - this page used to fall back to a

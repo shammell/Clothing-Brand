@@ -14,6 +14,7 @@ import {
   productFromApi,
   toggleWishlist,
 } from "@/lib/shop-store";
+import { cacheProducts, getCachedProduct } from "@/lib/product-cache";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { ProductDetailSkeleton } from "@/components/Skeletons";
 
@@ -23,8 +24,8 @@ const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
 export default function ProductDetailPage() {
   const params = useParams<{ id: string }>();
   const productId = params.id;
-  const [product, setProduct] = useState<Product | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [product, setProduct] = useState<Product | null>(() => getCachedProduct(productId));
+  const [loading, setLoading] = useState(() => !getCachedProduct(productId));
   const [loadError, setLoadError] = useState("");
   const wishlist = useSyncExternalStore(subscribeToStorage, getWishlistSnapshot, getWishlistServerSnapshot);
   const { getSelection, selectSize, selectColor, setQuantity, addToCart, addStatus, sizeErrors } = useAddToCart();
@@ -35,12 +36,20 @@ export default function ProductDetailPage() {
     // known) - the case React's own docs call a valid use of useEffect, not
     // the derived-state anti-pattern this rule targets. No external-store
     // equivalent exists for an on-demand network fetch.
+    // A cached copy renders immediately (so the image can morph in from the
+    // card); the fetch below still refreshes stock in the background.
+    const cached = getCachedProduct(productId);
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    setLoading(true);
+    setProduct(cached);
+    setLoading(!cached);
     setLoadError("");
     fetch(`${API_BASE}/products/${productId}`)
       .then((response) => (response.ok ? response.json() : Promise.reject(new Error("not found"))))
-      .then((data: Record<string, unknown>) => setProduct(productFromApi(data)))
+      .then((data: Record<string, unknown>) => {
+        const fresh = productFromApi(data);
+        cacheProducts([fresh]);
+        setProduct(fresh);
+      })
       .catch(() => setLoadError("We couldn't find that product."))
       .finally(() => setLoading(false));
   }, [productId]);
@@ -57,7 +66,7 @@ export default function ProductDetailPage() {
         <section className="product-detail">
           <div className="product-detail-image">
             {product.badge && <span className="badge">{product.badge}</span>}
-            <ProductImage src={product.image} alt={product.name} priority />
+            <ProductImage src={product.image} alt={product.name} priority transitionName={`product-image-${product.id}`} />
           </div>
           <div className="product-detail-info">
             {product.brand && <p className="eyebrow">{product.brand}</p>}
