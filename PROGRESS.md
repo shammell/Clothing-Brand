@@ -1,97 +1,62 @@
-# Site Expansion — Progress Notes
+# Progress
 
-Updated 2026-10-09. Read this first if picking the work back up.
+Updated 2026-10-14. Read this first when resuming.
 
-## The goal
+## Live state (already on `origin/main` + Vercel prod)
 
-Full site expansion: three actor roles (Customer, Lister, Admin),
-15-route professional storefront (replacing the old modal-heavy
-3-route prototype), dummy payment UI (no Stripe), CSS-only
-micro-animations.
+- Roles (customer/lister/admin), 15-route storefront, dummy payments, admin dashboard (tabs, charts, sortable tables), production-readiness plan (Resend email, password reset, contact endpoint, Sentry, Blob uploads, audit log).
+- Auto-deploys on push to `origin/main`. Confirm with the user before any push.
 
-- **Spec:** `docs/superpowers/specs/2026-10-08-site-expansion-design.md`
-- **Plans:**
-  1. `docs/superpowers/plans/2026-10-08-phase1-role-backend.md`
-  2. `docs/superpowers/plans/2026-10-08-phase2-frontend-role-wiring.md`
-  3. `docs/superpowers/plans/2026-10-08-phase3-page-restructuring.md`
-  4. `docs/superpowers/plans/2026-10-08-phase4-lister-and-admin-users.md`
-  5. `docs/superpowers/plans/2026-10-08-phase5-static-pages-and-cleanup.md`
+## In flight: `feat/premium-store-ui` (27 commits, local only, NOT pushed, NOT merged)
 
-## Where things stand
+Plan: `PREMIUM_STORE_UI_PLAN.md` (untracked in repo root). All 28 tickets implemented.
 
-**All 5 phases are implemented and merged into local `main`.** Nothing
-has been pushed to `origin`/Vercel — that is a deliberate pause for the
-user to review and explicitly approve before any push or production
-deploy.
+| Sprint | Tickets | Status |
+|---|---|---|
+| 1 Variant inventory | DB-1..DB-5 | done |
+| 2 Shell + side cart | UI-1..UI-5 | done |
+| 3 Product surfaces | UI-6..UI-9 | done |
+| 4 Navigation motion | UI-10..UI-12 | done (UI-13 QA pass incomplete, see below) |
+| 5 Assistant + sizing | AI-1..AI-4 | done |
+| 6 Photo search + lookbook | AI-5..AI-9 | done |
 
-| Phase | Status |
-|---|---|
-| 1 — Role/RBAC backend | ✅ merged |
-| 2 — Frontend role wiring | ✅ merged |
-| 3 — Page restructuring (modals → real routes) | ✅ merged |
-| 4 — `/lister` dashboard + admin Users tab | ✅ merged |
-| 5 — `/about`, `/contact`, `/policies`, dead-code sweep | ✅ merged |
+Verification at last run: backend `pytest` 151 pass, frontend `vitest` 84 pass, `tsc` + `eslint` + `npm run build` clean. `backend/app/models/user.py`, `routes/users.py`, `frontend/app/checkout/payment/` untouched.
 
-All 15 routes from the spec exist and build cleanly: `/`, `/shop`,
-`/products/[id]`, `/cart`, `/checkout`, `/checkout/payment`,
-`/orders/[id]`, `/login`, `/register`, `/account`, `/admin`, `/lister`,
-`/about`, `/contact`, `/policies`.
+### Decisions that differ from the plan
 
-Real bugs found and fixed along the way (not just transcribed from the
-plans — each task's given code was traced for correctness, not just
-type-checked):
-- Phase 1: JWT trusted role/admin claim without re-checking the DB on
-  each request — a demoted/blocked user's old token kept working until
-  expiry. Fixed in both the pre-Phase-1 `is_admin` model and the
-  `role` model.
-- Phase 3: an open-redirect vulnerability in the `?next=` login/register
-  param (now guarded by `frontend/lib/safeNextPath.ts`), a post-login
-  redirect race that silently discarded `?next=`, a 0-stock
-  cart-quantity-ceiling bug, a hydration-timing race causing false
-  redirects/message-flashes on hard reload (fixed with a one-tick
-  `readyToRedirect`/`clientReady`/`hasHydrated` gate, applied
-  consistently on `/checkout`, `/checkout/payment`, `/orders/[id]`,
-  `/account`, and the homepage's cart-bump animation), and 5 real
-  ESLint errors only caught by actually running `eslint` (not just
-  `tsc`/`build`).
-- Phases 2, 4, 5: clean — no extra bug-fix commits needed.
+- Photo search takes a raw image body (not multipart): `python-multipart` is not installed and a dependency change once broke a prod install.
+- Header has no search box; homepage search moved into its category strip; photo search lives on `/shop` (header camera icon links to `/shop?photo=1` and focuses the button).
+- Chat global caps: `10/minute` and `300/day` (free Groq tier; real daily limits unverified).
+- Drawer "Pairs well with" links to the product page instead of adding directly.
+- `ViewTransition` goes through `components/ViewTransition.tsx` (falls back to passthrough where React lacks it, e.g. vitest).
+- PUT with legacy `sizes/colors/stock` keeps per-variant stock if the total is unchanged; a changed total re-splits.
+- Variant matrix capped: 15 sizes, 15 colors, 200 variants.
 
-## Verification done so far
+### Still to do
 
-- `cd frontend && npx tsc --noEmit && npm run build && npx eslint app/ components/ lib/` — clean (0 errors) on merged `main`.
-- `cd backend && python -m pytest -v` — 57/57 passing.
-- End-to-end browser walkthrough (local throwaway MongoDB, never
-  production Atlas) covering: register → shop → cart → checkout →
-  payment → order confirmation (order persistence double-checked via a
-  direct API call); admin dashboard (products/orders/users tabs);
-  promoting a user to lister and using `/lister` to add a product;
-  blocking a user and confirming their login is rejected; confirming an
-  admin cannot self-demote; `/about`; `/contact` (empty-submit blocked,
-  valid-submit confirms).
+1. **Finish the live browser pass (UI-13).** Only checked so far: shop (1440), product page with sold-out size + drawer (1440), lookbook + assistant (390). Not yet seen: reduced-motion, keyboard-only run, card to product image morph, photo search flow, Find my size and Shop this look dialogs, drawer fade-out, the quantity-stepper CSS fix, every surface at both widths. Playwright disconnected mid-session; reconnect and redo.
+2. **Before deploying (user actions):**
+   - Run `backend/scripts/migrate_product_variants.py --dry-run`, review, then run once. NOTE: `backend/.env` points at the production Atlas cluster, so even the dry run read prod.
+   - Run `backend/scripts/generate_companions.py` so `/lookbook` has looks.
+   - Check Groq tool calling (`openai/gpt-oss-20b`) and vision (`GROQ_VISION_MODEL`) with the real key. Mocks pass; no live call was made. Chat falls back to plain replies if tools are unsupported.
+   - Merchant must review the placeholder size charts (`backend/app/data/size_charts.py`).
+3. Merge/push only after the user says so.
 
-**Still open:** `/policies`' in-page anchor scroll (desktop + mobile
-width) has not been manually verified yet — the one remaining item from
-Phase 5's own Review Focus. Nothing else is outstanding before the
-push/deploy decision.
+## Local dev notes
 
-One observed, non-reproducing hiccup: once, right after a successful
-payment, client-side navigation briefly landed on `/cart` instead of
-`/orders/[id]`, during the very first (cold) Turbopack compile of that
-route in `next dev`. A careful retry on a warm route was stable. The
-order was always correctly created server-side either way. Treated as a
-dev-server-only artifact — `next build` (what actually runs in
-production) pre-compiles every route, so this exact race window can't
-exist there. Worth a second look only if it recurs.
+- Backend tests/dev: system Python (`python`), not `backend/venv` (broken). Local Mongo: `C:\Users\USER\mongodb-portable\...\mongod.exe --dbpath ./data --bind_ip 127.0.0.1` (start manually; tests hang without it).
+- For live testing never use the default `.env` DB: run `MONGODB_URL=mongodb://localhost:27017 DB_NAME=ui_dev` for `seed.py`, `generate_companions.py` and `uvicorn app.main:app --port 8000`; frontend `npm run dev` reads `.env.local` (`NEXT_PUBLIC_API_URL=http://localhost:8000`).
+- Shell gotcha: long `python - <<'EOF'` heredocs sometimes fail to parse here; write a scratch `.py` with the Write tool and run it.
+- Playwright screenshots with a relative filename land in the repo root; delete them after viewing.
 
-## To resume
+## Known limitations carried over
 
-1. Verify `/policies`' anchor nav scrolls correctly at both desktop and
-   mobile widths (last open item from Phase 5).
-2. Nothing else is planned beyond that — next decision is whether/when
-   to push to `origin` and deploy to Vercel. Confirm with the user
-   first; this has been explicitly held back pending their go-ahead.
+- Audit log capped at 200 entries, no pagination.
+- No email verification at signup.
+- Resend sender is `onboarding@resend.dev` (delivers only to the account owner until a domain is verified).
+- Admin save can race a customer order (PUT replaces the document); per-variant stock adjustment endpoints would close it.
+- Sentry production check and live `/api/upload` check were never done.
 
-## Nothing is lost if this session ends
+## Follow-ups not in scope
 
-Everything above is committed to git on `main`. `git log --oneline` is
-the source of truth over this summary if they ever disagree.
+Back-in-stock notifications, per-colour images/gallery, vector-based visual search, server-rendered product pages.
