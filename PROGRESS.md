@@ -16,6 +16,10 @@ Updated 2026-10-14 (end of day). Read this first when resuming.
 - Prod verified: login rate limit 429 after 10, spoofed `X-Forwarded-For` no bypass. Playwright on prod: shop, product page, size arrow keys, side cart, checkout login redirect, mobile 390px, static pages, 404, no stray 401 (the 401 users see is just a wrong-password login or an expired 30 min token).
 - Vercel MCP is authorized for the personal scope only: store creation and redeploy work, runtime logs return 403 (team scope).
 
+## Next up: admin UI/UX pass (planned 2026-10-14, not started)
+
+Plan: `docs/superpowers/plans/2026-10-14-admin-ui-ux.md`. Covers admin login and dashboard only, frontend only, no new deps. Two real bugs are in it: Overview revenue counts cancelled orders, and the Products KPI shows "—" until the Products tab is opened.
+
 ## Still to do
 
 1. **Resend delivery unproven**: dashboard Logs show only old 422s and no entry for the contact tests. Need the error body of a 422 row from the user (suspect `Thread&Co <onboarding@resend.dev>` sender or sandbox recipient rule). Confirm "Contact form: ..." mail reaches the inbox.
