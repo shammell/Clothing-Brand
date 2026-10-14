@@ -238,6 +238,10 @@ export default function AdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
+      if (response.status === 401) {
+        expire();
+        return;
+      }
       const data = await response.json();
       if (!response.ok) {
         // Covers the self-demotion 400 from the backend: surfaced, not pre-disabled.

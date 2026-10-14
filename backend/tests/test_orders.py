@@ -421,3 +421,72 @@ def test_concurrent_orders_for_last_unit_only_one_wins(client, auth_headers, see
         results = list(pool.map(lambda _: _order(client, auth_headers, _line(product_id, "S", "Black")).status_code, range(2)))
     assert sorted(results) == [201, 409]
     assert _variant_stock(client, product_id)[0][("S", "Black")] == 0
+
+
+def _place_and_get_id(client, auth_headers, product_id, quantity=2):
+    return client.post(
+        "/orders/",
+        headers=auth_headers,
+        json={
+            "items": [{"product_id": product_id, "quantity": quantity, "size": "S", "color": "Black"}],
+            "shipping_address": SAMPLE_ADDRESS,
+        },
+    ).json()["id"]
+
+
+def test_cancelled_order_cannot_be_reopened(client, auth_headers, admin_headers, seed_product):
+    product_id = seed_product(stock=10)
+    order_id = _place_and_get_id(client, auth_headers, product_id)
+    client.patch(f"/orders/{order_id}/status", headers=admin_headers, json={"status": "cancelled"})
+
+    reopen = client.patch(f"/orders/{order_id}/status", headers=admin_headers, json={"status": "shipped"})
+    assert reopen.status_code == 409
+
+    # Still cancelled, and cancelling again afterwards credits nothing extra.
+    again = client.patch(f"/orders/{order_id}/status", headers=admin_headers, json={"status": "cancelled"})
+    assert again.status_code == 200
+    assert again.json()["status"] == "cancelled"
+    assert client.get(f"/products/{product_id}").json()["stock"] == 10
+
+
+def test_update_status_of_unknown_order_is_404(client, admin_headers):
+    response = client.patch("/orders/64b000000000000000000000/status", headers=admin_headers, json={"status": "shipped"})
+    assert response.status_code == 404
+
+
+def test_concurrent_cancels_restore_stock_once(client, auth_headers, admin_headers, seed_product):
+    from concurrent.futures import ThreadPoolExecutor
+
+    product_id = seed_product(stock=10)
+    order_id = _place_and_get_id(client, auth_headers, product_id, quantity=2)
+    assert client.get(f"/products/{product_id}").json()["stock"] == 8
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        codes = list(
+            pool.map(
+                lambda _: client.patch(
+                    f"/orders/{order_id}/status", headers=admin_headers, json={"status": "cancelled"}
+                ).status_code,
+                range(4),
+            )
+        )
+    assert codes == [200, 200, 200, 200]
+    assert client.get(f"/products/{product_id}").json()["stock"] == 10
+
+
+def test_non_http_failure_after_decrement_restores_stock(client, auth_headers, seed_product, monkeypatch):
+    import pytest
+
+    from app.routes import orders as orders_module
+
+    product_id = seed_product(stock=10)
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("simulated failure after stock was reserved")
+
+    monkeypatch.setattr(orders_module, "OrderItemResponse", boom)
+    with pytest.raises(RuntimeError):
+        _place_and_get_id(client, auth_headers, product_id, quantity=2)
+    monkeypatch.undo()
+
+    assert client.get(f"/products/{product_id}").json()["stock"] == 10

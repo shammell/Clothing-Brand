@@ -4,6 +4,7 @@ from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, status
 from jose import JWTError
+from pymongo.errors import DuplicateKeyError
 
 from app.core.config import settings
 from app.core.database import get_database
@@ -53,7 +54,15 @@ async def register(request: Request, user: UserRegister):
         "is_blocked": False,
         "created_at": datetime.now(timezone.utc),
     }
-    result = await db["users"].insert_one(new_user)
+    try:
+        result = await db["users"].insert_one(new_user)
+    except DuplicateKeyError as error:
+        # Lost a race with a concurrent registration of the same email (both
+        # passed the find_one check); the unique index caught it.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
+        ) from error
 
     user_id = str(result.inserted_id)
     token = create_access_token({"user_id": user_id, "email": email, "role": "customer"})

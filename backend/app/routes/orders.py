@@ -3,7 +3,8 @@ from datetime import datetime, timezone
 from bson import ObjectId
 from bson.errors import InvalidId
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, status
-from pymongo.errors import DuplicateKeyError, PyMongoError
+from pymongo import ReturnDocument
+from pymongo.errors import DuplicateKeyError
 
 from app.core.database import get_database
 from app.models.order import OrderCreate, OrderItemResponse, OrderResponse, OrderStatusUpdate
@@ -36,6 +37,11 @@ async def release_variant_stock(
         if result.modified_count:
             return
     await products_collection.update_one({"_id": object_id}, {"$inc": {"stock": quantity}})
+
+
+async def release_all(products_collection, reserved: list[tuple[ObjectId, str, str, int]]) -> None:
+    for object_id, size, color, quantity in reserved:
+        await release_variant_stock(products_collection, object_id, size, color, quantity)
 
 
 @router.post("/", response_model=OrderResponse, status_code=status.HTTP_201_CREATED)
@@ -158,9 +164,11 @@ async def create_order(
             )
             for (product_id, size, color), quantity in requested_variants.items()
         ]
-    except HTTPException:
-        for object_id, size, color, quantity in decremented:
-            await release_variant_stock(products_collection, object_id, size, color, quantity)
+    except BaseException:
+        # Not just HTTPException: a Mongo error or any other failure partway
+        # through the loop would otherwise leave earlier lines' stock
+        # decremented with no order to show for it.
+        await release_all(products_collection, decremented)
         raise
 
     total = round(sum(line.subtotal for line in order_items), 2)
@@ -185,17 +193,15 @@ async def create_order(
         # (both passed the find_one check above before either had inserted).
         # The stock this call reserved was never actually used - release it
         # and hand back whichever order the winner created.
-        for object_id, size, color, quantity in decremented:
-            await release_variant_stock(products_collection, object_id, size, color, quantity)
+        await release_all(products_collection, decremented)
         winning_order = await db["orders"].find_one(
             {"user_id": current_user["user_id"], "idempotency_key": idempotency_key}
         )
         if winning_order:
             return serialize_order(winning_order)
         raise
-    except PyMongoError:
-        for object_id, size, color, quantity in decremented:
-            await release_variant_stock(products_collection, object_id, size, color, quantity)
+    except BaseException:
+        await release_all(products_collection, decremented)
         raise
     order_doc["_id"] = result.inserted_id
     # Backgrounded, not called inline - send_email() makes a blocking HTTP
@@ -240,20 +246,35 @@ async def update_order_status(
             detail="Invalid order id",
         ) from error
 
-    order = await db["orders"].find_one({"_id": object_id})
-    if not order:
+    # Cancelling is one-way. Stock was reserved at order creation and is given
+    # back on cancel; reopening would need re-reserving stock that may be gone,
+    # and a second cancel would credit it twice. The status change is claimed
+    # atomically (filter on "not already cancelled"), so of two concurrent
+    # requests only one wins and only the winner releases stock. A crash
+    # between claim and release under-counts stock rather than over-counting.
+    orders_collection = db["orders"]
+    claimed = await orders_collection.find_one_and_update(
+        {"_id": object_id, "status": {"$ne": "cancelled"}},
+        {"$set": {"status": update.status}},
+        return_document=ReturnDocument.AFTER,
+    )
+    if claimed is None:
+        existing = await orders_collection.find_one({"_id": object_id})
+        if not existing:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Order not found",
+            )
+        if update.status == "cancelled":
+            return serialize_order(existing)
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Order not found",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cancelled orders cannot be reopened",
         )
 
-    # Stock was reserved (decremented) at order creation. Cancelling an order
-    # that wasn't already cancelled releases that stock back - skipped if
-    # it's already cancelled, so saving the same status twice in a row can't
-    # double-credit stock.
-    if update.status == "cancelled" and order.get("status") != "cancelled":
+    if update.status == "cancelled":
         products_collection = db["products"]
-        for item in order.get("items", []):
+        for item in claimed.get("items", []):
             try:
                 product_object_id = ObjectId(item["product_id"])
             except InvalidId:
@@ -265,7 +286,4 @@ async def update_order_status(
                 item.get("color") or "",
                 item["quantity"],
             )
-
-    await db["orders"].update_one({"_id": object_id}, {"$set": {"status": update.status}})
-    updated = await db["orders"].find_one({"_id": object_id})
-    return serialize_order(updated)
+    return serialize_order(claimed)

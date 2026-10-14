@@ -370,3 +370,58 @@ def test_forgot_password_does_not_resend_within_cooldown(client, register_user, 
     assert first.status_code == 202
     assert second.status_code == 202
     assert len(sent) == 1
+
+
+def test_password_longer_than_bcrypt_limit_registers_and_logs_in(client, register_user):
+    long_ascii = "a" * 100
+    assert register_user(email="long1@example.com", password=long_ascii).status_code == 200
+    assert client.post("/auth/login", json={"email": "long1@example.com", "password": long_ascii}).status_code == 200
+
+    multibyte = "é" * 60  # 120 bytes, 60 characters
+    assert register_user(username="Mb", email="long2@example.com", password=multibyte).status_code == 200
+    assert client.post("/auth/login", json={"email": "long2@example.com", "password": multibyte}).status_code == 200
+
+
+def test_long_password_difference_inside_first_72_bytes_is_rejected(client, register_user):
+    register_user(email="long3@example.com", password="b" * 100)
+    response = client.post("/auth/login", json={"email": "long3@example.com", "password": "c" + "b" * 99})
+    assert response.status_code == 401
+
+
+def test_concurrent_registrations_with_same_email_create_one_account(client):
+    from concurrent.futures import ThreadPoolExecutor
+
+    def register(_):
+        return client.post(
+            "/auth/register",
+            json={"username": "Racer", "email": "race@example.com", "password": "racepass123"},
+        ).status_code
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        codes = sorted(pool.map(register, range(2)))
+    assert codes == [200, 400]
+    assert client.post("/auth/login", json={"email": "race@example.com", "password": "racepass123"}).status_code == 200
+
+
+def test_users_email_has_unique_index():
+    import asyncio
+
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    from app.core.config import settings
+
+    async def unique_email_index_exists() -> bool:
+        db_client = AsyncIOMotorClient(settings.MONGODB_URL)
+        try:
+            info = await db_client[settings.DB_NAME]["users"].index_information()
+            return any(index.get("unique") and index["key"] == [("email", 1)] for index in info.values())
+        finally:
+            db_client.close()
+
+    # Index is built at app startup, so spin the app up once via the fixture-free route.
+    from fastapi.testclient import TestClient
+
+    from app.main import app
+
+    with TestClient(app):
+        assert asyncio.run(unique_email_index_exists())

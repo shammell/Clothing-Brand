@@ -183,7 +183,8 @@ export function OrdersTab({
                       <Badge tone={ORDER_STATUS_TONE[order.status] ?? "neutral"}>{order.status}</Badge>
                       <select
                         value={order.status}
-                        disabled={updatingOrderId === order.id}
+                        disabled={updatingOrderId === order.id || order.status === "cancelled"}
+                        title={order.status === "cancelled" ? "Cancelled orders can't be reopened" : undefined}
                         aria-label={`Status for order ${shortId(order.id)}`}
                         onChange={(event) => onStatusChange(order, event.target.value)}
                         className={selectClass}

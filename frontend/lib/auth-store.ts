@@ -80,8 +80,10 @@ export function extractErrorMessage(data: unknown, fallback: string): string {
 // is already stale - clearing it is the only way to stop every subsequent
 // authenticated call from failing the same way.
 export async function authenticatedFetch(url: string, token: string, init?: RequestInit): Promise<Response> {
-  return fetch(url, {
+  const response = await fetch(url, {
     ...init,
     headers: { ...(init?.headers ?? {}), Authorization: `Bearer ${token}` },
   });
+  if (response.status === 401 && token) writeAuth("", "");
+  return response;
 }

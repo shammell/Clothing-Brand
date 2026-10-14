@@ -15,17 +15,25 @@ from app.core.database import get_database
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
+BCRYPT_MAX_BYTES = 72
+
+
+def _password_bytes(password: str) -> bytes:
+    # bcrypt only uses the first 72 bytes, and bcrypt>=5 raises ValueError
+    # beyond that instead of truncating - while the models accept up to 128
+    # characters. Truncating here, identically for hashing and verifying,
+    # matches what older bcrypt did silently, so existing hashes still verify.
+    return password.encode("utf-8")[:BCRYPT_MAX_BYTES]
+
+
 def hash_password(password: str) -> str:
-    return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    return bcrypt.hashpw(_password_bytes(password), bcrypt.gensalt()).decode("utf-8")
 
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     if not hashed_password:
         return False
-    return bcrypt.checkpw(
-        plain_password.encode("utf-8"),
-        hashed_password.encode("utf-8"),
-    )
+    return bcrypt.checkpw(_password_bytes(plain_password), hashed_password.encode("utf-8"))
 
 
 RESET_TOKEN_EXPIRE_MINUTES = 15

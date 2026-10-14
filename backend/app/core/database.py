@@ -1,5 +1,6 @@
 import certifi
 from motor.motor_asyncio import AsyncIOMotorClient
+from pymongo.errors import PyMongoError
 from app.core.config import settings
 
 client: AsyncIOMotorClient = None
@@ -19,6 +20,14 @@ async def connect_db():
         unique=True,
         partialFilterExpression={"idempotency_key": {"$exists": True}},
     )
+    # Registration checks for an existing email and then inserts; without a
+    # unique index two simultaneous registrations both pass the check. Failure
+    # to build it (e.g. pre-existing duplicate emails in the data) must not
+    # stop the app from starting, so it is reported and skipped.
+    try:
+        await client[settings.DB_NAME]["users"].create_index("email", unique=True)
+    except PyMongoError as error:
+        print(f"WARNING: could not create unique users.email index: {error}")
     print("Connected to MongoDB")
 
 async def close_db():
