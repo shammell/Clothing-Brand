@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type FormEvent, type SVGProps } f
 import { upload } from "@vercel/blob/client";
 import { authenticatedFetch, extractErrorMessage } from "@/lib/auth-store";
 import { fetchAllProducts, ProductsFetchError } from "@/lib/fetchAllProducts";
+import { IconRefresh } from "@/app/admin/_components/ui";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { SortableTh } from "@/components/SortableTh";
 import { PairsWithPicker } from "@/components/PairsWithPicker";
@@ -77,17 +78,6 @@ const iconButtonClass =
 
 type IconProps = SVGProps<SVGSVGElement>;
 const iconDefaults = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-
-function IconRefresh(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <path d="M3 11a9 9 0 0 1 15.3-5.3L21 8" />
-      <path d="M21 3v5h-5" />
-      <path d="M21 13a9 9 0 0 1-15.3 5.3L3 16" />
-      <path d="M3 21v-5h5" />
-    </svg>
-  );
-}
 
 function IconPencil(props: IconProps) {
   return (

@@ -16,18 +16,13 @@ Updated 2026-10-15. Read this first when resuming.
 - Prod verified: login rate limit 429 after 10, spoofed `X-Forwarded-For` no bypass. Playwright on prod: shop, product page, size arrow keys, side cart, checkout login redirect, mobile 390px, static pages, 404, no stray 401 (the 401 users see is just a wrong-password login or an expired 30 min token).
 - Vercel MCP is authorized for the personal scope only: store creation and redeploy work, runtime logs return 403 (team scope).
 
-## Local commits, NOT pushed (5 ahead of origin/main; push = prod deploy, ask user first)
+## Local commits, NOT pushed (8 ahead of origin/main; push = prod deploy, ask user first)
 
 - `924fc8d` admin UI/UX pass (plan `docs/superpowers/plans/2026-10-14-admin-ui-ux.md`): `frontend/app/admin/_components/*`, confirm dialog, toasts, hash tabs, revenue excludes cancelled, Products KPI loads on mount.
 - `cc3416f` review fixes 1-5: cancelled orders are terminal + atomic stock release, stock rollback on any checkout failure, bcrypt 72-byte truncation, unique `users.email` index (startup only warns if existing duplicates block it: check Vercel logs after push), `authenticatedFetch` clears login on 401.
 - `dd4992e` review fixes 6-8: `/products/` skip/limit (max 200) + `fetchAllProducts` helper, `GET /orders/{id}`, `/products/looks` single companion query (still capped at 100 looks, `MAX_LOOKS`).
+- Shortening done: ProductManager reuses `IconRefresh`, `chat_tools._parse_object_id`, companions keep stored order, Badge shows "Out of stock". Not done: `useAdminResource` hook.
 - Tests: backend 171, frontend 105, tsc/lint/build clean. Admin UI checked in Playwright with mocked API only; real backend and `/lister` live save NOT checked; order detail page not browser-checked.
-
-## Code-review leftovers (not done, optional)
-
-- Shorten: `ProductManager.tsx` duplicates classes/`IconRefresh` from `admin/_components/ui.tsx`; `chat_tools.py` ObjectId-parse block copied 3x (also companions come back in DB order, not stored order); `admin/page.tsx` three near-identical loaders -> one `useAdminResource` hook.
-- Cosmetic: Badge `capitalize` renders "Out Of Stock" / "2 Left".
-- Review was a 16-tool-call pass, not a line-by-line read of every file.
 
 ## Still to do
 
@@ -40,7 +35,6 @@ Updated 2026-10-15. Read this first when resuming.
 7. Confirm Redis is live: no "in-process memory storage" warning in Vercel logs.
 8. Merchant review of placeholder size charts (`backend/app/data/size_charts.py`).
 9. Route-decorator limits (per-IP, chat) still swap to 5/minute during a Redis outage (slowapi limitation).
-10. Untracked planning docs `docs/superpowers/plans/2026-10-12-production-readiness*.md`: commit or delete.
 
 ## Local dev notes
 

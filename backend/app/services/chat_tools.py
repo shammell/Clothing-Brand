@@ -153,12 +153,15 @@ async def _search_products(args: dict[str, Any], context: ToolContext) -> dict[s
     return {"products": result["products"]}
 
 
-async def _get_variant_availability(args: dict[str, Any], context: ToolContext) -> dict[str, Any]:
-    raw_id = args.get("product_id")
+def _parse_object_id(raw_id: Any) -> ObjectId | None:
     try:
-        object_id = ObjectId(raw_id) if isinstance(raw_id, str) else None
+        return ObjectId(raw_id) if isinstance(raw_id, str) else None
     except InvalidId:
-        object_id = None
+        return None
+
+
+async def _get_variant_availability(args: dict[str, Any], context: ToolContext) -> dict[str, Any]:
+    object_id = _parse_object_id(args.get("product_id"))
     if object_id is None:
         return {"error": "product_id is not a valid product id"}
     document = await get_database()["products"].find_one({"_id": object_id})
@@ -176,11 +179,7 @@ async def _get_variant_availability(args: dict[str, Any], context: ToolContext) 
 
 
 async def _recommend_size(args: dict[str, Any], context: ToolContext) -> dict[str, Any]:
-    raw_id = args.get("product_id")
-    try:
-        object_id = ObjectId(raw_id) if isinstance(raw_id, str) else None
-    except InvalidId:
-        object_id = None
+    object_id = _parse_object_id(args.get("product_id"))
     height, weight, fit = args.get("height_cm"), args.get("weight_kg"), args.get("fit", "regular")
     numbers_ok = all(isinstance(n, (int, float)) and not isinstance(n, bool) for n in (height, weight))
     if object_id is None or not numbers_ok or fit not in ("snug", "regular", "relaxed"):
@@ -205,11 +204,7 @@ async def _recommend_size(args: dict[str, Any], context: ToolContext) -> dict[st
 
 
 async def _get_companions(args: dict[str, Any], context: ToolContext) -> dict[str, Any]:
-    raw_id = args.get("product_id")
-    try:
-        object_id = ObjectId(raw_id) if isinstance(raw_id, str) else None
-    except InvalidId:
-        object_id = None
+    object_id = _parse_object_id(args.get("product_id"))
     if object_id is None:
         return {"error": "product_id is not a valid product id"}
     products = get_database()["products"]
@@ -219,7 +214,8 @@ async def _get_companions(args: dict[str, Any], context: ToolContext) -> dict[st
     # Stored pairings first, then the rules fill any gaps (still in stock only).
     stored_ids = [ObjectId(c) for c in document.get("companions", []) if ObjectId.is_valid(c)]
     stored = await products.find({"_id": {"$in": stored_ids}, "stock": {"$gt": 0}}).to_list(length=len(stored_ids) or 1) if stored_ids else []
-    chosen = list(stored)
+    by_id = {c["_id"]: c for c in stored}
+    chosen = [by_id[i] for i in stored_ids if i in by_id]
     if len(chosen) < MAX_COMPANION_RESULTS:
         pool = await products.find({"stock": {"$gt": 0}}).to_list(length=200)
         for candidate in rank_companions(document, pool):
