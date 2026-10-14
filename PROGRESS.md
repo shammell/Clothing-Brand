@@ -29,7 +29,6 @@ Updated 2026-10-15. Read this first when resuming.
 1. **Resend delivery unproven**: dashboard Logs show only old 422s and no entry for the contact tests. Need the error body of a 422 row from the user (suspect `Thread&Co <onboarding@resend.dev>` sender or sandbox recipient rule). Confirm "Contact form: ..." mail reaches the inbox.
 2. **Admin password**: was shown in chat. Reset via `/forgot-password` once email works.
 3. **Real image upload** by an admin or lister never tested end to end (needs login).
-4. **Sentry**: confirm an event under Issues (no test-error route exists; offer to add a temporary one).
 5. **Admin StatCard fix** not seen live (needs admin login), check at a narrow width.
 6. **`TRUSTED_PROXY_HOPS`** unset. Spoof test passed, but confirm the per-IP key is the real client IP (try 1, then 2).
 7. Confirm Redis is live: no "in-process memory storage" warning in Vercel logs.
