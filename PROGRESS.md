@@ -2,7 +2,7 @@
 
 Updated 2026-10-14. Read this first when resuming.
 
-## Live state (on `origin/main` + Vercel prod, last deploy `6ff3e97`)
+## Live state (on `origin/main` + Vercel prod, last pushed `718dd3b`)
 
 - Roles (customer/lister/admin), 15-route storefront, dummy payments, admin dashboard (tabs, charts, sortable tables), production-readiness plan (Resend email, password reset, contact endpoint, Sentry, Blob uploads, audit log).
 - Premium store UI merged 2026-10-14 (`63154a9`): variant inventory, side cart, product surfaces, nav motion, assistant + Find my size, photo search, lookbook. Plan: `PREMIUM_STORE_UI_PLAN.md`. Prod DB already migrated (variants, companions).
@@ -10,15 +10,23 @@ Updated 2026-10-14. Read this first when resuming.
 - Verified before push: backend pytest 154 pass, `tsc`/eslint/`next build`/vitest clean, clean `npm ci` from lockfile. Prod smoke: `/`, `/admin`, `/api/products/` 200, junk photo upload 415.
 - Auto-deploys on push to `origin/main`. Confirm with the user before any push.
 
+## Done 2026-10-14 (pushed, last commit `718dd3b`)
+
+- User set prod env vars in Vercel (`FRONTEND_URL`, `RESEND_API_KEY`, `SUPPORT_EMAIL`, `SENTRY_DSN`, `REDIS_URL`) and redeployed.
+- Fixed: admin StatCard label/icon overlap, size radios select on arrow key, `<img>` eslint warnings silenced with reason, contact page shows real support email (`NEXT_PUBLIC_SUPPORT_EMAIL` overrides), merged local branch deleted.
+- Prod verified: login rate limit 429 after 10, spoofed `X-Forwarded-For` does not bypass it. Playwright pass on prod: shop, product page, size arrow keys, side cart, checkout login redirect, mobile 390px, static pages, 404.
+
 ## Still to do
 
-1. **Redis**: prod has no `REDIS_URL`, so "global" rate caps are per serverless instance. Add Upstash via Vercel Marketplace (user's account).
-2. **`TRUSTED_PROXY_HOPS`** unset: per-IP limits may collapse to the Vercel proxy IP. Set it and check the real client IP live.
-3. **Missing prod env vars**: `RESEND_API_KEY`, `SUPPORT_EMAIL`, `FRONTEND_URL` (defaults to `localhost:3000`, breaks reset links), `SENTRY_DSN`. Until set, forgot-password email, contact form and Sentry likely do nothing in prod.
-4. Admin password was reset directly in Atlas on 2026-10-14 and shown in chat: user should change it (`/forgot-password` once email works).
-5. Merchant review of placeholder size charts (`backend/app/data/size_charts.py`).
-6. Route-decorator limits (per-IP, chat) still swap to 5/minute during a Redis outage (slowapi limitation).
-7. (done, uncommitted) size radios select on arrow key, eslint `<img>` warnings silenced with reason, admin StatCard label no longer overlaps icon, local branch deleted.
+1. **Resend delivery unproven**: Logs showed only old 422s and no entry for the contact tests. Open a 422 row for the error body (suspect sender `Thread&Co <...>` or sandbox recipient rule). Confirm "Contact form: ..." mail reaches the inbox.
+2. **Admin password**: shown in chat earlier. Reset via `/forgot-password` once email delivery is confirmed.
+3. **Sentry**: confirm an event shows under Issues (no test-error route exists).
+4. **Admin StatCard fix** not seen live (needs admin login). Check at a narrow width.
+5. **`TRUSTED_PROXY_HOPS`** still unset. Spoof test passed, but verify the per-IP key is the real client IP and set it if not (try 1, then 2).
+6. Confirm Redis is live: no "in-process memory storage" warning in Vercel logs after deploy.
+7. Merchant review of placeholder size charts (`backend/app/data/size_charts.py`).
+8. Route-decorator limits (per-IP, chat) still swap to 5/minute during a Redis outage (slowapi limitation).
+9. Untracked planning docs `docs/superpowers/plans/2026-10-12-production-readiness*.md`: commit or delete.
 
 ## Local dev notes
 
