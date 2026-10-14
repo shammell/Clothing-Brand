@@ -24,7 +24,9 @@ export function ProductImage({ src, alt, priority = false, className, transition
     if (node?.complete && node.naturalWidth > 0) setLoaded(true);
   }, []);
 
+  // Plain <img>: sources are arbitrary seller/Blob URLs that next/image would need allow-listing for.
   const image = (
+    // eslint-disable-next-line @next/next/no-img-element
     <img
       ref={ref}
       src={failed ? FALLBACK_IMAGE : src}

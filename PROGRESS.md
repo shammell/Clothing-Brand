@@ -18,8 +18,7 @@ Updated 2026-10-14. Read this first when resuming.
 4. Admin password was reset directly in Atlas on 2026-10-14 and shown in chat: user should change it (`/forgot-password` once email works).
 5. Merchant review of placeholder size charts (`backend/app/data/size_charts.py`).
 6. Route-decorator limits (per-IP, chat) still swap to 5/minute during a Redis outage (slowapi limitation).
-7. Minor: size radios don't select on arrow key; 2 eslint `<img>` warnings.
-8. Delete local branch `feat/premium-store-ui` when convenient (already merged).
+7. (done, uncommitted) size radios select on arrow key, eslint `<img>` warnings silenced with reason, admin StatCard label no longer overlaps icon, local branch deleted.
 
 ## Local dev notes
 

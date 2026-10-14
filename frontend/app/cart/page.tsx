@@ -22,6 +22,7 @@ export default function CartPage() {
         <>
           {cart.map((item, index) => (
             <div className="cart-item" key={`${item.id}-${item.size}-${item.color}-${index}`}>
+              {/* eslint-disable-next-line @next/next/no-img-element -- arbitrary seller/Blob URLs */}
               <img src={item.image} alt={item.name} onError={(event) => { event.currentTarget.onerror = null; event.currentTarget.src = FALLBACK_IMAGE; }} />
               <div>
                 <b>{item.name}</b>

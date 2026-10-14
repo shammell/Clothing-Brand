@@ -31,16 +31,18 @@ export function SizeSelector({ product, color, value, onSelect, variant = "full"
     const next = (from + (forward ? 1 : -1) + product.sizes.length) % product.sizes.length;
     setFocusIndex(next);
     buttons.current[next]?.focus();
+    // Native radio behaviour: arrowing onto a size selects it.
+    choose(product.sizes[next]);
   };
 
-  const choose = (size: string) => {
+  function choose(size: string) {
     if (availability[size] === "sold_out") {
       setSoldOutSize(size);
       return;
     }
     setSoldOutSize(null);
     onSelect(size);
-  };
+  }
 
   // Colours that still have the sold-out size, for the inline note.
   const colorsWithSize = (size: string) =>

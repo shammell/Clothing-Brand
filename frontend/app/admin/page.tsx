@@ -1001,13 +1001,13 @@ function StatCard({
 }) {
   return (
     <div className={cardClass}>
-      <div className="flex items-center justify-between">
-        <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+      <div className="flex items-center justify-between gap-2">
+        <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
           <Icon className="h-4 w-4" />
         </span>
       </div>
-      <p className="mt-2 text-2xl font-semibold text-slate-900">{value}</p>
+      <p className="mt-2 truncate text-2xl font-semibold text-slate-900">{value}</p>
       {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
     </div>
   );
