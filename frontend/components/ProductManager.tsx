@@ -153,7 +153,7 @@ export function ProductManager({
     try {
       const blob = await upload(file.name, file, {
         access: "public",
-        handleUploadUrl: "/api/upload",
+        handleUploadUrl: "/blob-upload",
         clientPayload: authToken,
       });
       setForm((current) => ({ ...current, image_url: blob.url }));

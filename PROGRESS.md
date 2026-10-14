@@ -42,7 +42,7 @@ Updated 2026-10-14. Read this first when resuming.
 - No email verification at signup.
 - Resend sender is `onboarding@resend.dev` (delivers only to the account owner until a domain is verified).
 - Admin save can race a customer order (PUT replaces the document); per-variant stock adjustment endpoints would close it.
-- Sentry production check and live `/api/upload` check were never done.
+- Sentry production check and a live image upload check (`/blob-upload`) were never done.
 
 ## Out of scope
 
