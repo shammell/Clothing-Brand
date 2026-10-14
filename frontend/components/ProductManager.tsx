@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type SVGProps } from "react";
 import { upload } from "@vercel/blob/client";
 import { authenticatedFetch, extractErrorMessage } from "@/lib/auth-store";
+import { fetchAllProducts, ProductsFetchError } from "@/lib/fetchAllProducts";
 import { TableSkeleton } from "@/components/TableSkeleton";
 import { SortableTh } from "@/components/SortableTh";
 import { PairsWithPicker } from "@/components/PairsWithPicker";
@@ -178,17 +179,11 @@ export function ProductManager({
     setProductsLoading(true);
     setProductsError("");
     try {
-      const response = await fetch(`${API_BASE}/products/`);
-      const data = await response.json();
-      if (!response.ok) {
-        setProductsError(extractErrorMessage(data, "Could not load products."));
-        return;
-      }
-      const loaded = data as Product[];
+      const loaded = (await fetchAllProducts(API_BASE)) as Product[];
       setProducts(loaded);
       onProductsChange?.(loaded);
-    } catch {
-      setProductsError("Could not connect to the server.");
+    } catch (error) {
+      setProductsError(error instanceof ProductsFetchError ? error.message : "Could not connect to the server.");
     } finally {
       setProductsLoading(false);
     }

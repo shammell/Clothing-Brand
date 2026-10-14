@@ -95,3 +95,43 @@ def test_script_fills_skips_manual_and_is_idempotent(client, seed_product):
 
     asyncio.run(script.generate(dry_run=False, overwrite=False, use_llm=False))
     assert client.get(f"/products/{tee}").json()["companions"] == first["companions"]
+
+
+def test_looks_use_one_companion_query_however_many_looks(client, seed_product, monkeypatch):
+    from app.routes import products as products_module
+
+    shared = [seed_product(name=f"Piece {i}", stock=5) for i in range(3)]
+    gone = seed_product(name="Gone", stock=0)
+    for index in range(4):
+        seed_product(name=f"Main {index}", companions=[shared[0], gone, shared[1], shared[2]])
+
+    calls = {"find": 0}
+    real_get_database = products_module.get_database
+
+    class CountingCollection:
+        def __init__(self, collection):
+            self._collection = collection
+
+        def find(self, *args, **kwargs):
+            calls["find"] += 1
+            return self._collection.find(*args, **kwargs)
+
+        def __getattr__(self, name):
+            return getattr(self._collection, name)
+
+    class CountingDatabase:
+        def __init__(self, database):
+            self._database = database
+
+        def __getitem__(self, name):
+            return CountingCollection(self._database[name])
+
+    monkeypatch.setattr(products_module, "get_database", lambda: CountingDatabase(real_get_database()))
+    looks = client.get("/products/looks").json()
+
+    # 4 mains (shared pieces have no companions of their own): one query for
+    # the products, one for all their companions.
+    assert calls["find"] == 2
+    assert len(looks) == 4
+    for look in looks:
+        assert [c["name"] for c in look["companions"]] == ["Piece 0", "Piece 1", "Piece 2"]

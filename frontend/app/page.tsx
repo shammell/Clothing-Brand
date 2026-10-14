@@ -11,6 +11,7 @@ import {
   toggleWishlist,
 } from "@/lib/shop-store";
 import { cacheProducts } from "@/lib/product-cache";
+import { fetchAllProducts } from "@/lib/fetchAllProducts";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { ProductCard } from "@/components/ProductCard";
 import { SiteFooter } from "@/components/SiteFooter";
@@ -43,9 +44,8 @@ export default function Home() {
   const loadProducts = () => {
     setProductsLoading(true);
     setProductsError(false);
-    fetch(`${API_BASE}/products/`)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Products unavailable"))))
-      .then((data: Array<Record<string, unknown>>) => {
+    fetchAllProducts(API_BASE)
+      .then((data) => {
         const loaded = data.map(productFromApi);
         cacheProducts(loaded);
         setCatalog(loaded);

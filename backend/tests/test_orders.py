@@ -490,3 +490,55 @@ def test_non_http_failure_after_decrement_restores_stock(client, auth_headers, s
     monkeypatch.undo()
 
     assert client.get(f"/products/{product_id}").json()["stock"] == 10
+
+
+def test_get_single_order_for_owner_admin_and_hidden_from_others(client, auth_headers, admin_headers, register_user, seed_product):
+    product_id = seed_product(stock=10)
+    order_id = _place_and_get_id(client, auth_headers, product_id)
+
+    own = client.get(f"/orders/{order_id}", headers=auth_headers)
+    assert own.status_code == 200 and own.json()["id"] == order_id
+
+    assert client.get(f"/orders/{order_id}", headers=admin_headers).status_code == 200
+
+    other = register_user(username="Other", email="other@example.com", password="otherpass123").json()["access_token"]
+    assert client.get(f"/orders/{order_id}", headers={"Authorization": f"Bearer {other}"}).status_code == 404
+
+
+def test_get_single_order_requires_auth_and_handles_bad_ids(client, auth_headers):
+    assert client.get("/orders/64b000000000000000000000").status_code == 401
+    assert client.get("/orders/not-an-id", headers=auth_headers).status_code == 404
+    assert client.get("/orders/64b000000000000000000000", headers=auth_headers).status_code == 404
+
+
+def test_get_order_still_finds_orders_beyond_the_list_cap(client, auth_headers, seed_product):
+    import asyncio
+
+    from datetime import datetime, timedelta, timezone
+
+    from bson import ObjectId
+
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    from app.core.config import settings
+
+    product_id = seed_product(stock=10)
+    oldest_id = _place_and_get_id(client, auth_headers, product_id)
+
+    async def add_newer_orders():
+        db_client = AsyncIOMotorClient(settings.MONGODB_URL)
+        try:
+            user_id = (await db_client[settings.DB_NAME]["orders"].find_one({"_id": ObjectId(oldest_id)}))["user_id"]
+            now = datetime.now(timezone.utc)
+            await db_client[settings.DB_NAME]["orders"].insert_many(
+                [
+                    {"user_id": user_id, "items": [], "total": 0.0, "status": "placed", "created_at": now + timedelta(seconds=i + 1)}
+                    for i in range(110)
+                ]
+            )
+        finally:
+            db_client.close()
+
+    asyncio.run(add_newer_orders())
+    assert oldest_id not in [order["id"] for order in client.get("/orders/me", headers=auth_headers).json()]
+    assert client.get(f"/orders/{oldest_id}", headers=auth_headers).status_code == 200

@@ -267,3 +267,49 @@ def test_looks_lists_only_products_with_two_or_more_resolvable_companions(client
 def test_looks_empty_when_no_pairings(client, seed_product):
     seed_product()
     assert client.get("/products/looks").json() == []
+
+
+def _insert_many_products(count: int) -> None:
+    import asyncio
+
+    from motor.motor_asyncio import AsyncIOMotorClient
+
+    from app.core.config import settings
+
+    async def insert() -> None:
+        db_client = AsyncIOMotorClient(settings.MONGODB_URL)
+        try:
+            await db_client[settings.DB_NAME]["products"].insert_many(
+                [
+                    {
+                        "name": f"Item {index:03d}", "description": "", "price": 10.0, "category": "Tops",
+                        "brand": "B", "sizes": ["S"], "colors": ["Black"], "image_url": "/x", "stock": 3, "rating": 4.0,
+                    }
+                    for index in range(count)
+                ]
+            )
+        finally:
+            db_client.close()
+
+    asyncio.run(insert())
+
+
+def test_catalogue_is_not_truncated_at_100_products(client):
+    _insert_many_products(120)
+    assert len(client.get("/products/").json()) == 120
+
+
+def test_products_pages_cover_everything_once_in_stable_order(client):
+    _insert_many_products(5)
+    first = client.get("/products/", params={"limit": 2, "skip": 0}).json()
+    second = client.get("/products/", params={"limit": 2, "skip": 2}).json()
+    third = client.get("/products/", params={"limit": 2, "skip": 4}).json()
+    assert [p["name"] for p in first + second + third] == [f"Item {i:03d}" for i in range(5)]
+    assert len(third) == 1
+    assert client.get("/products/", params={"skip": 10}).json() == []
+
+
+def test_products_page_params_are_validated(client):
+    assert client.get("/products/", params={"limit": 0}).status_code == 422
+    assert client.get("/products/", params={"limit": 201}).status_code == 422
+    assert client.get("/products/", params={"skip": -1}).status_code == 422

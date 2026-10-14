@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useState, useSyncExternalStore } from "react";
-import { authenticatedFetch, getAuthServerSnapshot, getAuthTokenSnapshot, getRoleServerSnapshot, getRoleSnapshot, isAdminRole, subscribeToStorage } from "@/lib/auth-store";
+import { authenticatedFetch, getAuthServerSnapshot, getAuthTokenSnapshot, subscribeToStorage } from "@/lib/auth-store";
 import { OrderSkeleton } from "@/components/Skeletons";
 
 
@@ -33,7 +33,6 @@ export default function OrderDetailPage() {
   const params = useParams<{ id: string }>();
   const orderId = params.id;
   const authToken = useSyncExternalStore(subscribeToStorage, getAuthTokenSnapshot, getAuthServerSnapshot);
-  const role = useSyncExternalStore(subscribeToStorage, getRoleSnapshot, getRoleServerSnapshot);
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
@@ -57,23 +56,16 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     if (!authToken || !orderId) return;
-    const endpoint = isAdminRole(role) ? "/orders/" : "/orders/me";
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setNotFound(false);
-    authenticatedFetch(`${API_BASE}${endpoint}`, authToken)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Could not load orders"))))
-      .then((orders: Order[]) => {
-        const match = orders.find((candidate) => candidate.id === orderId);
-        if (!match) {
-          setNotFound(true);
-          return;
-        }
-        setOrder(match);
-      })
+    // The server returns the order for its owner or an admin, 404 otherwise.
+    authenticatedFetch(`${API_BASE}/orders/${encodeURIComponent(orderId)}`, authToken)
+      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Order unavailable"))))
+      .then((loaded: Order) => setOrder(loaded))
       .catch(() => setNotFound(true))
       .finally(() => setLoading(false));
-  }, [authToken, orderId, role]);
+  }, [authToken, orderId]);
 
   if (clientReady && !authToken) {
     return (

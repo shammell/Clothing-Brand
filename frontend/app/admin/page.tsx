@@ -15,6 +15,7 @@ import {
   writeAuth,
 } from "@/lib/auth-store";
 import { ProductManager } from "@/components/ProductManager";
+import { fetchAllProducts } from "@/lib/fetchAllProducts";
 import { AdminLogin, AccessDenied } from "./_components/AdminLogin";
 import { OverviewTab } from "./_components/OverviewTab";
 import { OrdersTab, type OrderFilter } from "./_components/OrdersTab";
@@ -112,9 +113,7 @@ export default function AdminPage() {
 
   const loadProducts = async () => {
     try {
-      const response = await fetch(`${API_BASE}/products/`);
-      if (!response.ok) return;
-      setProducts((await response.json()) as AdminProduct[]);
+      setProducts((await fetchAllProducts(API_BASE)) as AdminProduct[]);
     } catch {
       /* KPI falls back to the placeholder; the Products tab reports its own errors */
     }

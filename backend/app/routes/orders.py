@@ -224,6 +224,23 @@ async def list_my_orders(current_user: CurrentUser = Depends(get_current_user)):
     return [serialize_order(order) for order in orders]
 
 
+@router.get("/{order_id}", response_model=OrderResponse)
+async def get_order(order_id: str, current_user: CurrentUser = Depends(get_current_user)):
+    """One order, for its owner or an admin. Anyone else gets 404, not 403, so
+    order ids can't be probed for existence."""
+    try:
+        object_id = ObjectId(order_id)
+    except InvalidId as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found") from error
+    query = {"_id": object_id}
+    if current_user["role"] != "admin":
+        query["user_id"] = current_user["user_id"]
+    order = await get_database()["orders"].find_one(query)
+    if not order:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
+    return serialize_order(order)
+
+
 @router.get("/", response_model=list[OrderResponse])
 async def list_all_orders(_: CurrentUser = Depends(require_admin)):
     db = get_database()

@@ -14,6 +14,7 @@ import {
   toggleWishlist,
 } from "@/lib/shop-store";
 import { cacheProducts } from "@/lib/product-cache";
+import { fetchAllProducts } from "@/lib/fetchAllProducts";
 import { useAddToCart } from "@/lib/useAddToCart";
 import { ProductGridSkeleton } from "@/components/Skeletons";
 import { VisualSearch, describeMatch, type VisualState } from "@/components/VisualSearch";
@@ -40,9 +41,8 @@ export default function ShopPage() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setLoadError("");
-    fetch(`${API_BASE}/products/`)
-      .then((response) => (response.ok ? response.json() : Promise.reject(new Error("Products unavailable"))))
-      .then((data: Array<Record<string, unknown>>) => {
+    fetchAllProducts(API_BASE)
+      .then((data) => {
         const loaded = data.map(productFromApi);
         cacheProducts(loaded);
         setCatalog(loaded);

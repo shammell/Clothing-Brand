@@ -2,7 +2,7 @@ from typing import Any, Optional
 
 from bson import ObjectId
 from bson.errors import InvalidId
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 
 from app.core.database import get_database
 from app.core.limiter import limiter
@@ -33,15 +33,26 @@ def parse_product_id(product_id: str) -> ObjectId:
         ) from error
 
 
+MAX_PAGE_SIZE = 200
+MAX_LOOKS = 100
+
+
 @router.get("/", response_model=list[ProductResponse])
-async def get_products(category: Optional[str] = None):
+async def get_products(
+    category: Optional[str] = None,
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=MAX_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
+):
+    """One page of the catalogue. A page shorter than `limit` is the last one."""
     normalized_category = category.strip() if category else None
     query = {"category": normalized_category} if normalized_category else {}
+    # _id as a tiebreaker: equal names would otherwise page in unstable order.
     products = (
         await get_database()["products"]
         .find(query)
-        .sort("name", 1)
-        .to_list(length=100)
+        .sort([("name", 1), ("_id", 1)])
+        .skip(skip)
+        .to_list(length=limit)
     )
     return [serialize_product(product) for product in products]
 
@@ -50,10 +61,11 @@ async def get_products(category: Optional[str] = None):
 @router.get("/looks", response_model=list[LookResponse])
 async def get_looks():
     """Outfits: in-stock products with two or more in-stock companions, companions expanded."""
-    products = await get_database()["products"].find({"stock": {"$gt": 0}, "companions.1": {"$exists": True}}).sort("name", 1).to_list(length=100)
+    products = await get_database()["products"].find({"stock": {"$gt": 0}, "companions.1": {"$exists": True}}).sort("name", 1).to_list(length=MAX_LOOKS)
+    companions_by_id = await load_companions_by_id(products)
     looks = []
     for product in products:
-        companions = await resolve_companions(product)
+        companions = pick_companions(product, companions_by_id)
         if len(companions) >= 2:
             looks.append({"product": serialize_product(product), "companions": [serialize_product(c) for c in companions]})
     return looks
@@ -90,14 +102,27 @@ async def validate_companions(companion_ids: list[str] | None, own_id: ObjectId 
         raise HTTPException(status_code=422, detail="One of the paired products does not exist")
 
 
-async def resolve_companions(product: dict[str, Any]) -> list[dict[str, Any]]:
-    """Companion products that still exist and are in stock, in the stored order."""
-    ids = [ObjectId(companion_id) for companion_id in product.get("companions", []) if ObjectId.is_valid(companion_id)]
+def companion_object_ids(product: dict[str, Any]) -> list[ObjectId]:
+    return [ObjectId(companion_id) for companion_id in product.get("companions", []) if ObjectId.is_valid(companion_id)]
+
+
+async def load_companions_by_id(products: list[dict[str, Any]]) -> dict[ObjectId, dict[str, Any]]:
+    """In-stock companions of all `products`, fetched with a single query."""
+    ids = list({object_id for product in products for object_id in companion_object_ids(product)})
     if not ids:
-        return []
+        return {}
     found = await get_database()["products"].find({"_id": {"$in": ids}, "stock": {"$gt": 0}}).to_list(length=len(ids))
-    by_id = {document["_id"]: document for document in found}
+    return {document["_id"]: document for document in found}
+
+
+def pick_companions(product: dict[str, Any], by_id: dict[ObjectId, dict[str, Any]]) -> list[dict[str, Any]]:
+    """The product's companions that still exist and are in stock, in the stored order."""
+    ids = companion_object_ids(product)
     return [by_id[object_id] for object_id in ids if object_id in by_id and object_id != product["_id"]][:MAX_COMPANIONS]
+
+
+async def resolve_companions(product: dict[str, Any]) -> list[dict[str, Any]]:
+    return pick_companions(product, await load_companions_by_id([product]))
 
 
 @router.get("/{product_id}/companions", response_model=list[ProductResponse])
