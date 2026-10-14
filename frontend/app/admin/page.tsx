@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState, useSyncExternalStore, type ReactNode, type SVGProps } from "react";
+import Link from "next/link";
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import {
   authenticatedFetch,
   extractErrorMessage,
@@ -14,290 +15,90 @@ import {
   writeAuth,
 } from "@/lib/auth-store";
 import { ProductManager } from "@/components/ProductManager";
-import { RevenueChart, OrderStatusBreakdown } from "@/components/RevenueChart";
-import { TableSkeleton, CardSkeleton } from "@/components/TableSkeleton";
-import { SortableTh } from "@/components/SortableTh";
+import { AdminLogin, AccessDenied } from "./_components/AdminLogin";
+import { OverviewTab } from "./_components/OverviewTab";
+import { OrdersTab, type OrderFilter } from "./_components/OrdersTab";
+import { UsersTab } from "./_components/UsersTab";
+import { AuditTab } from "./_components/AuditTab";
+import { useConfirm } from "./_components/ConfirmDialog";
+import { useToast } from "./_components/Toast";
+import {
+  API_BASE,
+  Avatar,
+  Badge,
+  IconLogout,
+  IconRefresh,
+  NAV_ICONS,
+  TABS,
+  TAB_LABELS,
+  TAB_SUBTITLES,
+  computeStats,
+  focusRing,
+  formatRelative,
+  ghostButtonClass,
+  iconButtonClass,
+  shortId,
+  type AdminProduct,
+  type AuditLogEntry,
+  type Order,
+  type Tab,
+  type UserSummary,
+} from "./_components/ui";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL ?? "/api";
+const SESSION_EXPIRED = "Your session expired. Sign in again to continue.";
 
-type OrderItem = {
-  product_id: string;
-  name: string;
-  price: number;
-  quantity: number;
-  subtotal: number;
-  size: string;
-  color: string;
-};
-
-type ShippingAddress = {
-  full_name: string;
-  address_line1: string;
-  address_line2?: string | null;
-  city: string;
-  state: string;
-  postal_code: string;
-  country: string;
-  phone?: string | null;
-};
-
-type Order = {
-  id: string;
-  items: OrderItem[];
-  total: number;
-  status: string;
-  created_at: string;
-  shipping_address?: ShippingAddress | null;
-};
-
-const ORDER_STATUSES = ["placed", "processing", "shipped", "delivered", "cancelled"] as const;
-const ORDER_FILTERS = ["all", ...ORDER_STATUSES] as const;
-const OPEN_ORDER_STATUSES = new Set(["placed", "processing"]);
-const ORDER_SORTS = ["newest", "oldest", "total-desc", "total-asc"] as const;
-const ORDER_SORT_LABELS: Record<(typeof ORDER_SORTS)[number], string> = {
-  newest: "Newest first",
-  oldest: "Oldest first",
-  "total-desc": "Highest total",
-  "total-asc": "Lowest total",
-};
-
-type UserSummary = {
-  id: string;
-  username: string;
-  email: string;
-  role: "customer" | "lister" | "admin";
-  is_blocked: boolean;
-  created_at: string;
-};
-
-const ROLES = ["customer", "lister", "admin"] as const;
-const USER_ROLE_FILTERS = ["all", ...ROLES] as const;
-
-type Product = { id: string };
-
-type AuditLogEntry = {
-  id: string;
-  actor_id: string;
-  action: string;
-  target_user_id: string;
-  details: Record<string, unknown>;
-  created_at: string;
-};
-
-const TABS = ["overview", "products", "orders", "users", "audit"] as const;
-type Tab = (typeof TABS)[number];
-const TAB_LABELS: Record<Tab, string> = {
-  overview: "Overview",
-  products: "Products",
-  orders: "Orders",
-  users: "Users",
-  audit: "Audit log",
-};
-
-const inputClass =
-  "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500";
-const cardClass = "bg-white rounded-xl border border-slate-200 shadow-sm p-6";
-const primaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors";
-const ghostButtonClass =
-  "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-60";
-const iconButtonClass =
-  "inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50";
-const selectClass =
-  "rounded-lg border border-slate-300 bg-white px-2 py-1.5 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 disabled:opacity-60";
-
-function formatAction(action: string): string {
-  return action.replace(/_/g, " ");
+function tabFromHash(): Tab {
+  if (typeof window === "undefined") return "overview";
+  const hash = window.location.hash.replace("#", "");
+  return (TABS as readonly string[]).includes(hash) ? (hash as Tab) : "overview";
 }
-
-function formatDetails(details: Record<string, unknown>): string {
-  const entries = Object.entries(details);
-  if (entries.length === 0) return "—";
-  return entries.map(([key, value]) => `${key.replace(/_/g, " ")}: ${String(value)}`).join(", ");
-}
-
-type BadgeTone = "neutral" | "green" | "red" | "amber" | "blue" | "purple";
-
-const BADGE_TONE_CLASS: Record<BadgeTone, string> = {
-  neutral: "bg-slate-100 text-slate-700",
-  green: "bg-emerald-100 text-emerald-700",
-  red: "bg-red-100 text-red-700",
-  amber: "bg-amber-100 text-amber-700",
-  blue: "bg-blue-100 text-blue-700",
-  purple: "bg-purple-100 text-purple-700",
-};
-
-function Badge({ children, tone = "neutral" }: { children: ReactNode; tone?: BadgeTone }) {
-  return (
-    <span
-      className={`inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium capitalize ${BADGE_TONE_CLASS[tone]}`}
-    >
-      {children}
-    </span>
-  );
-}
-
-const ORDER_STATUS_TONE: Record<string, BadgeTone> = {
-  placed: "blue",
-  processing: "amber",
-  shipped: "purple",
-  delivered: "green",
-  cancelled: "red",
-};
-
-const ROLE_TONE: Record<UserSummary["role"], BadgeTone> = {
-  admin: "purple",
-  lister: "blue",
-  customer: "neutral",
-};
-
-type IconProps = SVGProps<SVGSVGElement>;
-const iconDefaults = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
-
-function IconGrid(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <rect x="3" y="3" width="8" height="8" rx="1.5" />
-      <rect x="13" y="3" width="8" height="8" rx="1.5" />
-      <rect x="3" y="13" width="8" height="8" rx="1.5" />
-      <rect x="13" y="13" width="8" height="8" rx="1.5" />
-    </svg>
-  );
-}
-
-function IconBox(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z" />
-      <path d="M3.5 7.5 12 12l8.5-4.5" />
-      <path d="M12 12v9" />
-    </svg>
-  );
-}
-
-function IconBag(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <path d="M6 7h12l1 13H5z" />
-      <path d="M9 7a3 3 0 0 1 6 0" />
-    </svg>
-  );
-}
-
-function IconUsers(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <circle cx="9" cy="8" r="3" />
-      <path d="M3 20c0-3.3 2.7-6 6-6s6 2.7 6 6" />
-      <circle cx="17" cy="9" r="2.5" />
-      <path d="M15.5 14c2.5.3 4.5 2.5 4.5 6" />
-    </svg>
-  );
-}
-
-function IconClipboard(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <rect x="5" y="4" width="14" height="17" rx="2" />
-      <path d="M9 3h6v3H9z" />
-      <path d="M8 10h8M8 14h8M8 18h5" />
-    </svg>
-  );
-}
-
-function IconLogout(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <path d="M9 4H6a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h3" />
-      <path d="M16 16l4-4-4-4" />
-      <path d="M20 12H9" />
-    </svg>
-  );
-}
-
-function IconSearch(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <circle cx="10.5" cy="10.5" r="6.5" />
-      <path d="M20 20l-4.3-4.3" />
-    </svg>
-  );
-}
-
-function IconRefresh(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <path d="M3 11a9 9 0 0 1 15.3-5.3L21 8" />
-      <path d="M21 3v5h-5" />
-      <path d="M21 13a9 9 0 0 1-15.3 5.3L3 16" />
-      <path d="M3 21v-5h5" />
-    </svg>
-  );
-}
-
-function IconLock(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <rect x="5" y="11" width="14" height="9" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 8 0v4" />
-    </svg>
-  );
-}
-
-function IconUnlock(props: IconProps) {
-  return (
-    <svg {...iconDefaults} {...props}>
-      <rect x="5" y="11" width="14" height="9" rx="2" />
-      <path d="M8 11V7a4 4 0 0 1 7-2.6" />
-    </svg>
-  );
-}
-
-const NAV_ICONS: Record<Tab, (props: IconProps) => ReactNode> = {
-  overview: IconGrid,
-  products: IconBox,
-  orders: IconBag,
-  users: IconUsers,
-  audit: IconClipboard,
-};
 
 export default function AdminPage() {
   const currentUser = useSyncExternalStore(subscribeToStorage, getCurrentUserSnapshot, getAuthServerSnapshot);
   const authToken = useSyncExternalStore(subscribeToStorage, getAuthTokenSnapshot, getAuthServerSnapshot);
   const role = useSyncExternalStore(subscribeToStorage, getRoleSnapshot, getRoleServerSnapshot);
 
-  const [tab, setTab] = useState<Tab>("overview");
+  const { confirm, dialog: confirmDialog } = useConfirm();
+  const { notify, toaster } = useToast();
+  const mainRef = useRef<HTMLElement>(null);
 
-  const [loginEmail, setLoginEmail] = useState("");
-  const [loginPassword, setLoginPassword] = useState("");
-  const [loginError, setLoginError] = useState("");
-  const [loginLoading, setLoginLoading] = useState(false);
+  const [tab, setTab] = useState<Tab>(tabFromHash);
+  const [ordersNav, setOrdersNav] = useState<{ filter: OrderFilter; expandedId: string | null }>({ filter: "all", expandedId: null });
+  const [productsKey, setProductsKey] = useState(0);
+  const [sessionNotice, setSessionNotice] = useState("");
+  const [lastUpdated, setLastUpdated] = useState<number | null>(null);
+  const [, setTick] = useState(0);
 
-  const [productCount, setProductCount] = useState<number | null>(null);
+  const [products, setProducts] = useState<AdminProduct[] | null>(null);
 
   const [orders, setOrders] = useState<Order[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const [ordersError, setOrdersError] = useState("");
   const [updatingOrderId, setUpdatingOrderId] = useState<string | null>(null);
   const [orderActionError, setOrderActionError] = useState("");
-  const [orderStatusFilter, setOrderStatusFilter] = useState<(typeof ORDER_FILTERS)[number]>("all");
-  const [orderSearch, setOrderSearch] = useState("");
-  const [orderSort, setOrderSort] = useState<(typeof ORDER_SORTS)[number]>("newest");
 
   const [users, setUsers] = useState<UserSummary[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [userActionError, setUserActionError] = useState("");
   const [updatingUserId, setUpdatingUserId] = useState<string | null>(null);
-  const [userRoleFilter, setUserRoleFilter] = useState<(typeof USER_ROLE_FILTERS)[number]>("all");
-  const [userSearch, setUserSearch] = useState("");
 
   const [auditEntries, setAuditEntries] = useState<AuditLogEntry[]>([]);
   const [auditLoading, setAuditLoading] = useState(false);
   const [auditError, setAuditError] = useState("");
   const [auditLoaded, setAuditLoaded] = useState(false);
 
-  const logout = () => writeAuth("", "");
+  const logout = (reason = "") => {
+    setSessionNotice(reason);
+    writeAuth("", "");
+  };
+  const expire = () => logout(SESSION_EXPIRED);
+
+  const goTo = (next: Tab, nav?: { filter?: OrderFilter; expandedId?: string }) => {
+    setOrdersNav({ filter: nav?.filter ?? "all", expandedId: nav?.expandedId ?? null });
+    setTab(next);
+    window.history.replaceState(null, "", `#${next}`);
+  };
 
   const usernameById = useMemo(() => {
     const map = new Map<string, string>();
@@ -305,14 +106,27 @@ export default function AdminPage() {
     return map;
   }, [users]);
 
+  const stats = useMemo(() => computeStats(orders, users), [orders, users]);
+
+  const touch = () => setLastUpdated(Date.now());
+
+  const loadProducts = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/products/`);
+      if (!response.ok) return;
+      setProducts((await response.json()) as AdminProduct[]);
+    } catch {
+      /* KPI falls back to the placeholder; the Products tab reports its own errors */
+    }
+  };
+
   const loadUsers = async () => {
     setUsersLoading(true);
     setUsersError("");
     try {
       const response = await authenticatedFetch(`${API_BASE}/users/`, authToken);
       if (response.status === 401) {
-        logout();
-        setUsersError("Your session expired. Please log in again.");
+        expire();
         return;
       }
       const data = await response.json();
@@ -321,60 +135,11 @@ export default function AdminPage() {
         return;
       }
       setUsers(data as UserSummary[]);
+      touch();
     } catch {
       setUsersError("Could not connect to the server.");
     } finally {
       setUsersLoading(false);
-    }
-  };
-
-  const updateUserRole = async (userId: string, nextRole: string) => {
-    setUpdatingUserId(userId);
-    setUserActionError("");
-    try {
-      const response = await authenticatedFetch(`${API_BASE}/users/${userId}/role`, authToken, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ role: nextRole }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        // Covers the self-demotion 400 from the backend - surfaced here
-        // rather than pre-disabled client-side (see plan's Global Constraints).
-        // A failed action is reported through userActionError, not
-        // usersError - the latter gates whether the table itself renders,
-        // and a rejected single-row update must not blank out the whole
-        // list the admin is looking at.
-        setUserActionError(extractErrorMessage(data, "Could not update role."));
-        return;
-      }
-      setUsers((current) => current.map((user) => (user.id === userId ? (data as UserSummary) : user)));
-    } catch {
-      setUserActionError("Could not connect to the server.");
-    } finally {
-      setUpdatingUserId(null);
-    }
-  };
-
-  const updateUserBlock = async (userId: string, isBlocked: boolean) => {
-    setUpdatingUserId(userId);
-    setUserActionError("");
-    try {
-      const response = await authenticatedFetch(`${API_BASE}/users/${userId}/block`, authToken, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ is_blocked: isBlocked }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setUserActionError(extractErrorMessage(data, "Could not update block status."));
-        return;
-      }
-      setUsers((current) => current.map((user) => (user.id === userId ? (data as UserSummary) : user)));
-    } catch {
-      setUserActionError("Could not connect to the server.");
-    } finally {
-      setUpdatingUserId(null);
     }
   };
 
@@ -384,8 +149,7 @@ export default function AdminPage() {
     try {
       const response = await authenticatedFetch(`${API_BASE}/orders/`, authToken);
       if (response.status === 401) {
-        logout();
-        setOrdersError("Your session expired. Please log in again.");
+        expire();
         return;
       }
       const data = await response.json();
@@ -394,40 +158,11 @@ export default function AdminPage() {
         return;
       }
       setOrders(data as Order[]);
+      touch();
     } catch {
       setOrdersError("Could not connect to the server.");
     } finally {
       setOrdersLoading(false);
-    }
-  };
-
-  const updateOrderStatus = async (orderId: string, status: string) => {
-    setUpdatingOrderId(orderId);
-    setOrderActionError("");
-    try {
-      const response = await authenticatedFetch(`${API_BASE}/orders/${orderId}/status`, authToken, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status }),
-      });
-      if (response.status === 401) {
-        logout();
-        setOrderActionError("Your session expired. Please log in again.");
-        return;
-      }
-      const data = await response.json();
-      if (!response.ok) {
-        // See updateUserRole's comment: action failures go through
-        // orderActionError so a single rejected update doesn't blank out
-        // the whole order list.
-        setOrderActionError(extractErrorMessage(data, "Could not update order status."));
-        return;
-      }
-      setOrders((current) => current.map((order) => (order.id === orderId ? (data as Order) : order)));
-    } catch {
-      setOrderActionError("Could not connect to the server.");
-    } finally {
-      setUpdatingOrderId(null);
     }
   };
 
@@ -437,8 +172,7 @@ export default function AdminPage() {
     try {
       const response = await authenticatedFetch(`${API_BASE}/users/audit-log`, authToken);
       if (response.status === 401) {
-        logout();
-        setAuditError("Your session expired. Please log in again.");
+        expire();
         return;
       }
       const data = await response.json();
@@ -448,6 +182,7 @@ export default function AdminPage() {
       }
       setAuditEntries(data as AuditLogEntry[]);
       setAuditLoaded(true);
+      touch();
     } catch {
       setAuditError("Could not connect to the server.");
     } finally {
@@ -455,28 +190,115 @@ export default function AdminPage() {
     }
   };
 
+  // Action failures go through *ActionError, not *Error: the latter gates
+  // whether the list renders, and one rejected row update must not blank it.
+  const changeOrderStatus = async (order: Order, status: string) => {
+    if (status === order.status) return;
+    if (status === "cancelled") {
+      const ok = await confirm({
+        title: `Cancel order #${shortId(order.id)}?`,
+        body: "The items go back into stock.",
+        confirmLabel: "Cancel order",
+        tone: "danger",
+      });
+      if (!ok) return;
+    }
+    setUpdatingOrderId(order.id);
+    setOrderActionError("");
+    try {
+      const response = await authenticatedFetch(`${API_BASE}/orders/${order.id}/status`, authToken, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status }),
+      });
+      if (response.status === 401) {
+        expire();
+        return;
+      }
+      const data = await response.json();
+      if (!response.ok) {
+        setOrderActionError(extractErrorMessage(data, "Could not update order status."));
+        return;
+      }
+      setOrders((current) => current.map((item) => (item.id === order.id ? (data as Order) : item)));
+      notify(`Order #${shortId(order.id)} marked ${status}`);
+    } catch {
+      setOrderActionError("Could not connect to the server.");
+    } finally {
+      setUpdatingOrderId(null);
+    }
+  };
+
+  const patchUser = async (user: UserSummary, path: "role" | "block", body: object, failure: string, success: string) => {
+    setUpdatingUserId(user.id);
+    setUserActionError("");
+    try {
+      const response = await authenticatedFetch(`${API_BASE}/users/${user.id}/${path}`, authToken, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        // Covers the self-demotion 400 from the backend: surfaced, not pre-disabled.
+        setUserActionError(extractErrorMessage(data, failure));
+        return;
+      }
+      setUsers((current) => current.map((item) => (item.id === user.id ? (data as UserSummary) : item)));
+      notify(success);
+    } catch {
+      setUserActionError("Could not connect to the server.");
+    } finally {
+      setUpdatingUserId(null);
+    }
+  };
+
+  const changeUserRole = async (user: UserSummary, nextRole: string) => {
+    if (nextRole === user.role) return;
+    const ok = await confirm({
+      title: `Change ${user.username}'s role?`,
+      body: `${user.role} → ${nextRole}. Their permissions change immediately.`,
+      confirmLabel: "Change role",
+    });
+    if (!ok) return;
+    await patchUser(user, "role", { role: nextRole }, "Could not update role.", `${user.username} is now ${nextRole}`);
+  };
+
+  const changeUserBlock = async (user: UserSummary, nextBlocked: boolean) => {
+    const ok = await confirm({
+      title: `${nextBlocked ? "Block" : "Unblock"} ${user.username}?`,
+      body: nextBlocked
+        ? "They'll be signed out of protected actions immediately."
+        : "They'll be able to sign in and order again.",
+      confirmLabel: nextBlocked ? "Block" : "Unblock",
+      tone: nextBlocked ? "danger" : "default",
+    });
+    if (!ok) return;
+    await patchUser(
+      user,
+      "block",
+      { is_blocked: nextBlocked },
+      "Could not update block status.",
+      `${user.username} ${nextBlocked ? "blocked" : "unblocked"}`
+    );
+  };
+
   useEffect(() => {
     if (!isAdminRole(role)) return;
     // Plain data-fetch effect (load admin data once admin access is
-    // confirmed) - the case React's own docs call a valid use of useEffect,
-    // not the derived-state anti-pattern this rule targets. No external-store
-    // equivalent exists for an on-demand network fetch.
+    // confirmed): a valid use of useEffect, not derived state. The load
+    // functions are recreated every render, so they are deliberately omitted -
+    // role is the only trigger this effect cares about.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     loadOrders();
     loadUsers();
-    // loadOrders/loadUsers are intentionally omitted: they're plain
-    // functions recreated every render, not memoized, so including them
-    // would re-run this effect (and re-fetch) on every render instead of
-    // only when admin access is first confirmed - role is the only actual
-    // trigger this effect cares about.
+    loadProducts();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [role]);
 
   useEffect(() => {
-    // Audit log is fetched lazily, the first time that tab is opened, rather
-    // than alongside orders/users above - it's the least-visited tab and the
-    // data (who changed what role/block) is only useful once someone's
-    // actually looking at it.
+    // Audit log is fetched lazily, the first time that tab is opened: it is
+    // the least-visited tab.
     if (tab === "audit" && !auditLoaded && !auditLoading && isAdminRole(role)) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       loadAuditLog();
@@ -484,179 +306,94 @@ export default function AdminPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, role]);
 
-  const login = async () => {
-    setLoginError("");
-    setLoginLoading(true);
-    try {
-      const response = await fetch(`${API_BASE}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: loginEmail, password: loginPassword }),
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setLoginError(extractErrorMessage(data, "Login failed."));
-        return;
-      }
-      writeAuth(data.access_token, data.user.username, data.user.role ?? "customer");
-      setLoginPassword("");
-    } catch {
-      setLoginError("Could not connect to the server.");
-    } finally {
-      setLoginLoading(false);
-    }
-  };
+  useEffect(() => {
+    // Back/forward and manual hash edits switch tabs too.
+    const onHashChange = () => setTab(tabFromHash());
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, []);
 
-  const filteredOrders = useMemo(() => {
-    const query = orderSearch.trim().toLowerCase();
-    const matched = orders.filter((order) => {
-      if (orderStatusFilter !== "all" && order.status !== orderStatusFilter) return false;
-      if (!query) return true;
-      const haystack = `${order.id} ${order.shipping_address?.full_name ?? ""}`.toLowerCase();
-      return haystack.includes(query);
-    });
-    const sorted = [...matched];
-    sorted.sort((a, b) => {
-      switch (orderSort) {
-        case "oldest":
-          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
-        case "total-desc":
-          return b.total - a.total;
-        case "total-asc":
-          return a.total - b.total;
-        default:
-          return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-      }
-    });
-    return sorted;
-  }, [orders, orderStatusFilter, orderSearch, orderSort]);
+  useEffect(() => {
+    // Re-render once a minute so "Updated Xm ago" stays honest.
+    const timer = setInterval(() => setTick((value) => value + 1), 60000);
+    return () => clearInterval(timer);
+  }, []);
 
-  const [userSort, setUserSort] = useState<{ key: "username" | "email" | "role" | "created_at"; direction: "asc" | "desc" }>({
-    key: "username",
-    direction: "asc",
-  });
+  const reloadCurrent = useCallback(() => {
+    if (tab === "overview") {
+      loadOrders();
+      loadUsers();
+      loadProducts();
+    } else if (tab === "products") {
+      setProductsKey((value) => value + 1);
+      loadProducts();
+    } else if (tab === "orders") loadOrders();
+    else if (tab === "users") loadUsers();
+    else loadAuditLog();
+    // load* are plain per-render functions; the current tab is the real input.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, authToken]);
 
-  const toggleUserSort = (key: typeof userSort.key) => {
-    setUserSort((current) =>
-      current.key === key
-        ? { key, direction: current.direction === "asc" ? "desc" : "asc" }
-        : { key, direction: "asc" }
+  if (!currentUser) return <AdminLogin sessionNotice={sessionNotice} />;
+  if (!isAdminRole(role)) return <AccessDenied username={currentUser} role={role} onSwitch={() => logout()} />;
+
+  const openOrderCount = stats.openOrders;
+  const navBadge = (item: Tab): number => (item === "orders" ? openOrderCount : item === "users" ? stats.blockedUsers : 0);
+
+  const renderNavButton = (item: Tab, layout: "side" | "top") => {
+    const Icon = NAV_ICONS[item];
+    const active = tab === item;
+    const count = navBadge(item);
+    const base =
+      layout === "side"
+        ? `flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-sm ${
+            active ? "bg-indigo-50 font-medium text-indigo-700" : "text-slate-600 hover:bg-slate-100"
+          }`
+        : `flex min-h-11 items-center gap-1.5 whitespace-nowrap border-b-2 px-3 py-2.5 text-sm ${
+            active ? "border-indigo-600 font-medium text-indigo-700" : "border-transparent text-slate-500 hover:text-slate-900"
+          }`;
+    return (
+      <button key={item} type="button" onClick={() => goTo(item)} aria-current={active ? "page" : undefined} className={`${base} ${focusRing}`}>
+        {layout === "side" && <Icon className="h-5 w-5 shrink-0" />}
+        {TAB_LABELS[item]}
+        {count > 0 && (
+          <span className="ml-auto rounded-full bg-slate-200 px-2 py-0.5 text-xs font-medium tabular-nums text-slate-700">{count}</span>
+        )}
+      </button>
     );
   };
-
-  const filteredUsers = useMemo(() => {
-    const query = userSearch.trim().toLowerCase();
-    const matched = users.filter((user) => {
-      if (userRoleFilter !== "all" && user.role !== userRoleFilter) return false;
-      if (!query) return true;
-      return `${user.username} ${user.email}`.toLowerCase().includes(query);
-    });
-    const sorted = [...matched];
-    const { key, direction } = userSort;
-    sorted.sort((a, b) => {
-      const result =
-        key === "created_at"
-          ? new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          : a[key].localeCompare(b[key]);
-      return direction === "asc" ? result : -result;
-    });
-    return sorted;
-  }, [users, userRoleFilter, userSearch, userSort]);
-
-  const stats = useMemo(() => {
-    const revenue = orders.reduce((sum, order) => sum + order.total, 0);
-    const openOrders = orders.filter((order) => OPEN_ORDER_STATUSES.has(order.status)).length;
-    const blockedUsers = users.filter((user) => user.is_blocked).length;
-    return { revenue, openOrders, blockedUsers };
-  }, [orders, users]);
-
-  if (!currentUser) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-        <form
-          className="w-full max-w-sm space-y-5 bg-white p-8 rounded-2xl shadow-sm border border-slate-200"
-          onSubmit={(event) => { event.preventDefault(); login(); }}
-        >
-          <div className="space-y-1">
-            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-600 text-white font-semibold">T</div>
-            <p role="heading" aria-level={1} className="text-xl font-semibold text-slate-900 pt-2">Admin sign in</p>
-            <p className="text-sm text-slate-500">Thread&amp;Co administration</p>
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="admin-email" className="block text-sm font-medium text-slate-700">Email address</label>
-            <input
-              id="admin-email"
-              type="email"
-              required
-              placeholder="you@company.com"
-              value={loginEmail}
-              onChange={(event) => setLoginEmail(event.target.value)}
-              className={inputClass}
-            />
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="admin-password" className="block text-sm font-medium text-slate-700">Password</label>
-            <input
-              id="admin-password"
-              type="password"
-              required
-              placeholder="••••••••"
-              value={loginPassword}
-              onChange={(event) => setLoginPassword(event.target.value)}
-              className={inputClass}
-            />
-          </div>
-          {loginError && <p className="text-sm text-red-600">{loginError}</p>}
-          <button type="submit" disabled={loginLoading} className={`${primaryButtonClass} w-full`}>
-            {loginLoading ? "Signing in..." : "Sign in"}
-          </button>
-        </form>
-      </main>
-    );
-  }
-
-  if (!isAdminRole(role)) {
-    return (
-      <main className="min-h-screen flex items-center justify-center bg-slate-50 px-4">
-        <div className="text-center space-y-4 bg-white p-8 rounded-2xl shadow-sm border border-slate-200 max-w-sm">
-          <p className="text-slate-700">Signed in as {currentUser}, but this account doesn&apos;t have admin access.</p>
-          <button onClick={logout} className={ghostButtonClass}>Log out</button>
-        </div>
-      </main>
-    );
-  }
 
   return (
     <div className="min-h-screen bg-slate-50 md:flex">
-      <aside className="hidden md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col bg-white border-r border-slate-200">
-        <div className="flex h-16 items-center gap-2 px-6 border-b border-slate-200">
+      <a
+        href="#main-content"
+        onClick={(event) => {
+          event.preventDefault();
+          mainRef.current?.focus();
+        }}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:rounded-lg focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:shadow-lg"
+      >
+        Skip to content
+      </a>
+
+      <aside className="hidden bg-white md:fixed md:inset-y-0 md:flex md:w-64 md:flex-col md:border-r md:border-slate-200">
+        <div className="flex h-16 items-center gap-2 border-b border-slate-200 px-6">
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-600 text-sm font-semibold text-white">T</span>
           <span className="font-semibold text-slate-900">Thread&amp;Co</span>
         </div>
-        <nav className="flex-1 space-y-1 px-3 py-4">
-          {TABS.map((item) => {
-            const Icon = NAV_ICONS[item];
-            const active = tab === item;
-            return (
-              <button
-                key={item}
-                onClick={() => setTab(item)}
-                className={
-                  active
-                    ? "flex w-full items-center gap-3 rounded-lg bg-indigo-50 px-3 py-2 text-sm font-medium text-indigo-700"
-                    : "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100"
-                }
-              >
-                <Icon className="h-5 w-5 shrink-0" />
-                {TAB_LABELS[item]}
-              </button>
-            );
-          })}
+        <nav aria-label="Admin sections" className="flex-1 space-y-1 px-3 py-4">
+          {TABS.map((item) => renderNavButton(item, "side"))}
         </nav>
-        <div className="border-t border-slate-200 px-3 py-4">
-          <p className="truncate px-3 text-xs text-slate-500">Signed in as</p>
-          <p className="mb-2 truncate px-3 text-sm font-medium text-slate-900">{currentUser}</p>
-          <button onClick={logout} className={`${ghostButtonClass} w-full`}>
+        <div className="space-y-2 border-t border-slate-200 px-3 py-4">
+          <div className="flex items-center gap-3 px-3">
+            <Avatar name={currentUser} />
+            <div className="min-w-0">
+              <p className="truncate text-sm font-medium text-slate-900">{currentUser}</p>
+              <Badge tone="purple">Admin</Badge>
+            </div>
+          </div>
+          <Link href="/" className={`${ghostButtonClass} w-full`}>View store ↗</Link>
+          <button type="button" onClick={() => logout()} className={`${ghostButtonClass} w-full`}>
             <IconLogout className="h-4 w-4" />
             Log out
           </button>
@@ -664,351 +401,95 @@ export default function AdminPage() {
       </aside>
 
       <div className="flex-1 md:ml-64">
-        <header className="sticky top-0 z-10 bg-white border-b border-slate-200">
-          <div className="flex h-16 items-center justify-between px-4 md:px-8">
-            <p role="heading" aria-level={1} className="text-lg font-semibold text-slate-900">{TAB_LABELS[tab]}</p>
-            <div className="flex items-center gap-3 text-sm text-slate-500 md:hidden">
-              <span className="max-w-[120px] truncate">{currentUser}</span>
-              <button onClick={logout} className={iconButtonClass} title="Log out" aria-label="Log out">
+        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white">
+          <div className="flex h-16 items-center justify-between gap-3 px-4 md:px-8">
+            <div className="min-w-0">
+              <p role="heading" aria-level={1} className="truncate text-lg font-semibold text-slate-900">{TAB_LABELS[tab]}</p>
+              <p className="hidden truncate text-xs text-slate-500 sm:block">{TAB_SUBTITLES[tab]}</p>
+            </div>
+            <div className="flex items-center gap-2 text-sm text-slate-500">
+              {lastUpdated && (
+                <span className="hidden sm:inline" title={new Date(lastUpdated).toLocaleString()}>
+                  Updated {formatRelative(new Date(lastUpdated).toISOString())}
+                </span>
+              )}
+              <button type="button" onClick={reloadCurrent} className={iconButtonClass} title="Refresh" aria-label={`Refresh ${TAB_LABELS[tab]}`}>
+                <IconRefresh className="h-4 w-4" />
+              </button>
+              <button type="button" onClick={() => logout()} className={`${iconButtonClass} md:hidden`} title="Log out" aria-label="Log out">
                 <IconLogout className="h-5 w-5" />
               </button>
             </div>
           </div>
-          <nav className="flex gap-1 overflow-x-auto border-t border-slate-100 px-4 md:hidden">
-            {TABS.map((item) => (
-              <button
-                key={item}
-                onClick={() => setTab(item)}
-                className={
-                  tab === item
-                    ? "whitespace-nowrap border-b-2 border-indigo-600 px-3 py-2.5 text-sm font-medium text-indigo-700"
-                    : "whitespace-nowrap border-b-2 border-transparent px-3 py-2.5 text-sm text-slate-500 hover:text-slate-900"
-                }
-              >
-                {TAB_LABELS[item]}
-              </button>
-            ))}
+          <nav aria-label="Admin sections" className="flex gap-1 overflow-x-auto border-t border-slate-100 px-4 md:hidden">
+            {TABS.map((item) => renderNavButton(item, "top"))}
           </nav>
         </header>
 
-        <div className="mx-auto max-w-6xl space-y-6 px-4 py-6 md:px-8 md:py-8">
+        <main id="main-content" ref={mainRef} tabIndex={-1} className="mx-auto max-w-6xl space-y-6 px-4 py-6 outline-none md:px-8 md:py-8">
           {tab === "overview" && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
-                <StatCard icon={IconBag} label="Revenue" value={`$${stats.revenue.toFixed(2)}`} />
-                <StatCard icon={IconBox} label="Orders" value={orders.length} sub={`${stats.openOrders} open`} />
-                <StatCard icon={IconUsers} label="Users" value={users.length} sub={`${stats.blockedUsers} blocked`} />
-                <StatCard icon={IconGrid} label="Products" value={productCount ?? "—"} />
-              </div>
-
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-                <section className={`${cardClass} md:col-span-2`}>
-                  <p role="heading" aria-level={2} className="mb-4 text-base font-semibold text-slate-900">Revenue, last 14 days</p>
-                  {ordersLoading ? <CardSkeleton /> : <RevenueChart orders={orders} />}
-                </section>
-                <section className={cardClass}>
-                  <p role="heading" aria-level={2} className="mb-4 text-base font-semibold text-slate-900">Orders by status</p>
-                  {ordersLoading ? <CardSkeleton /> : <OrderStatusBreakdown orders={orders} />}
-                </section>
-              </div>
-
-              <section className={cardClass}>
-                <div className="mb-4 flex items-center justify-between">
-                  <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Recent orders</p>
-                  <button onClick={() => setTab("orders")} className={ghostButtonClass}>View all</button>
-                </div>
-                {ordersLoading && <TableSkeleton rows={4} cols={3} />}
-                {!ordersLoading && orders.length === 0 && <p className="text-sm text-slate-500">No orders yet.</p>}
-                {!ordersLoading && orders.length > 0 && (
-                  <ul className="divide-y divide-slate-100 text-sm">
-                    {orders.slice(0, 5).map((order) => (
-                      <li key={order.id} className="flex items-center justify-between gap-3 py-3">
-                        <span className="text-slate-700">
-                          {order.shipping_address?.full_name ?? "Unknown"} · {new Date(order.created_at).toLocaleDateString()}
-                        </span>
-                        <span className="flex items-center gap-3">
-                          <Badge tone={ORDER_STATUS_TONE[order.status] ?? "neutral"}>{order.status}</Badge>
-                          <span className="font-medium text-slate-900">${order.total.toFixed(2)}</span>
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </div>
+            <OverviewTab
+              orders={orders}
+              users={users}
+              products={products}
+              stats={stats}
+              ordersLoading={ordersLoading}
+              onNavigate={(next, filter) => goTo(next, filter ? { filter: filter as OrderFilter } : undefined)}
+              onOpenOrder={(orderId) => goTo("orders", { expandedId: orderId })}
+            />
           )}
 
           {tab === "products" && (
             <ProductManager
+              key={productsKey}
               authToken={authToken}
-              onSessionExpired={logout}
-              onProductsChange={(products: Product[]) => setProductCount(products.length)}
+              onSessionExpired={expire}
+              onProductsChange={(list) => {
+                setProducts(list);
+                touch();
+              }}
+              confirm={confirm}
+              notify={notify}
             />
           )}
 
           {tab === "orders" && (
-            <section className={cardClass}>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Orders ({filteredOrders.length})</p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="relative">
-                    <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      placeholder="Search by order id or name"
-                      value={orderSearch}
-                      onChange={(event) => setOrderSearch(event.target.value)}
-                      className={`${inputClass} w-56 pl-8`}
-                    />
-                  </div>
-                  <select
-                    value={orderStatusFilter}
-                    onChange={(event) => setOrderStatusFilter(event.target.value as typeof orderStatusFilter)}
-                    className={selectClass}
-                  >
-                    {ORDER_FILTERS.map((status) => (
-                      <option key={status} value={status}>{status === "all" ? "All statuses" : status}</option>
-                    ))}
-                  </select>
-                  <select
-                    value={orderSort}
-                    onChange={(event) => setOrderSort(event.target.value as typeof orderSort)}
-                    className={selectClass}
-                    aria-label="Sort orders"
-                  >
-                    {ORDER_SORTS.map((sort) => (
-                      <option key={sort} value={sort}>{ORDER_SORT_LABELS[sort]}</option>
-                    ))}
-                  </select>
-                  <button onClick={loadOrders} className={iconButtonClass} title="Refresh orders" aria-label="Refresh orders">
-                    <IconRefresh className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              {ordersLoading && <TableSkeleton rows={4} cols={3} />}
-              {!ordersLoading && ordersError && <p className="text-sm text-red-600">{ordersError}</p>}
-              {!ordersLoading && !ordersError && orderActionError && (
-                <p className="mb-3 text-sm text-red-600">{orderActionError}</p>
-              )}
-              {!ordersLoading && !ordersError && filteredOrders.length === 0 && (
-                <p className="text-sm text-slate-500">{orders.length === 0 ? "No orders yet." : "No orders match your filters."}</p>
-              )}
-              {!ordersLoading && !ordersError && filteredOrders.length > 0 && (
-                <div className="space-y-4">
-                  {filteredOrders.map((order) => (
-                    <div key={order.id} className="rounded-xl border border-slate-200 p-4 text-sm">
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-3">
-                          <span className="text-slate-500">{new Date(order.created_at).toLocaleString()}</span>
-                          {order.shipping_address && (
-                            <span className="text-slate-700">
-                              {order.shipping_address.full_name} · {order.shipping_address.city}, {order.shipping_address.country}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <Badge tone={ORDER_STATUS_TONE[order.status] ?? "neutral"}>{order.status}</Badge>
-                          <select
-                            value={order.status}
-                            disabled={updatingOrderId === order.id}
-                            onChange={(event) => updateOrderStatus(order.id, event.target.value)}
-                            className={selectClass}
-                          >
-                            {ORDER_STATUSES.map((status) => (
-                              <option key={status} value={status}>{status}</option>
-                            ))}
-                          </select>
-                        </div>
-                      </div>
-                      <ul className="mb-2 space-y-1">
-                        {order.items.map((item) => (
-                          <li key={`${item.product_id}-${item.size}-${item.color}`} className="flex justify-between text-slate-700">
-                            <span>{item.quantity}× {item.name} ({item.size}{item.color ? `, ${item.color}` : ""})</span>
-                            <span>${item.subtotal.toFixed(2)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      <div className="flex justify-between border-t border-slate-100 pt-2 font-medium text-slate-900">
-                        <span>Total</span>
-                        <span>${order.total.toFixed(2)}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </section>
+            <OrdersTab
+              orders={orders}
+              loading={ordersLoading}
+              error={ordersError}
+              actionError={orderActionError}
+              updatingOrderId={updatingOrderId}
+              initialFilter={ordersNav.filter}
+              initialExpandedId={ordersNav.expandedId}
+              onReload={loadOrders}
+              onStatusChange={changeOrderStatus}
+              onCopied={() => notify("Order id copied")}
+            />
           )}
 
           {tab === "users" && (
-            <section className={cardClass}>
-              <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-                <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Users ({filteredUsers.length})</p>
-                <div className="flex flex-wrap items-center gap-3">
-                  <div className="relative">
-                    <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    <input
-                      placeholder="Search by username or email"
-                      value={userSearch}
-                      onChange={(event) => setUserSearch(event.target.value)}
-                      className={`${inputClass} w-56 pl-8`}
-                    />
-                  </div>
-                  <select
-                    value={userRoleFilter}
-                    onChange={(event) => setUserRoleFilter(event.target.value as typeof userRoleFilter)}
-                    className={selectClass}
-                  >
-                    {USER_ROLE_FILTERS.map((roleOption) => (
-                      <option key={roleOption} value={roleOption}>{roleOption === "all" ? "All roles" : roleOption}</option>
-                    ))}
-                  </select>
-                  <button onClick={loadUsers} className={iconButtonClass} title="Refresh users" aria-label="Refresh users">
-                    <IconRefresh className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-              {usersLoading && <TableSkeleton rows={5} cols={5} />}
-              {!usersLoading && usersError && <p className="text-sm text-red-600">{usersError}</p>}
-              {!usersLoading && !usersError && userActionError && (
-                <p className="mb-3 text-sm text-red-600">{userActionError}</p>
-              )}
-              {!usersLoading && !usersError && filteredUsers.length === 0 && (
-                <p className="text-sm text-slate-500">{users.length === 0 ? "No users yet." : "No users match your filters."}</p>
-              )}
-              {!usersLoading && !usersError && filteredUsers.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-slate-500">
-                        <SortableTh label="Username" active={userSort.key === "username"} direction={userSort.direction} onClick={() => toggleUserSort("username")} />
-                        <SortableTh label="Email" active={userSort.key === "email"} direction={userSort.direction} onClick={() => toggleUserSort("email")} />
-                        <SortableTh label="Role" active={userSort.key === "role"} direction={userSort.direction} onClick={() => toggleUserSort("role")} />
-                        <th className="py-2 pr-4 font-medium">Status</th>
-                        <SortableTh label="Joined" active={userSort.key === "created_at"} direction={userSort.direction} onClick={() => toggleUserSort("created_at")} />
-                        <th className="py-2 pr-4 font-medium" />
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredUsers.map((user) => (
-                        <tr key={user.id} className="border-b border-slate-100 hover:bg-slate-50">
-                          <td className="py-2.5 pr-4 text-slate-900">{user.username}</td>
-                          <td className="py-2.5 pr-4 text-slate-600">{user.email}</td>
-                          <td className="py-2.5 pr-4">
-                            <div className="flex items-center gap-2">
-                              <Badge tone={ROLE_TONE[user.role]}>{user.role}</Badge>
-                              <select
-                                value={user.role}
-                                disabled={updatingUserId === user.id}
-                                onChange={(event) => {
-                                  const nextRole = event.target.value;
-                                  if (nextRole === user.role) return;
-                                  if (!window.confirm(`Change ${user.username}'s role to "${nextRole}"?`)) return;
-                                  updateUserRole(user.id, nextRole);
-                                }}
-                                className={selectClass}
-                              >
-                                {ROLES.map((roleOption) => (
-                                  <option key={roleOption} value={roleOption}>{roleOption}</option>
-                                ))}
-                              </select>
-                            </div>
-                          </td>
-                          <td className="py-2.5 pr-4">
-                            <Badge tone={user.is_blocked ? "red" : "green"}>{user.is_blocked ? "Blocked" : "Active"}</Badge>
-                          </td>
-                          <td className="whitespace-nowrap py-2.5 pr-4 text-slate-500">{new Date(user.created_at).toLocaleDateString()}</td>
-                          <td className="py-2.5 pr-4">
-                            <button
-                              onClick={() => {
-                                const next = !user.is_blocked;
-                                const verb = next ? "Block" : "Unblock";
-                                if (!window.confirm(`${verb} ${user.username}?`)) return;
-                                updateUserBlock(user.id, next);
-                              }}
-                              disabled={updatingUserId === user.id}
-                              className={iconButtonClass}
-                              title={user.is_blocked ? "Unblock user" : "Block user"}
-                              aria-label={`${user.is_blocked ? "Unblock" : "Block"} ${user.username}`}
-                            >
-                              {user.is_blocked ? <IconUnlock className="h-4 w-4" /> : <IconLock className="h-4 w-4" />}
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+            <UsersTab
+              users={users}
+              loading={usersLoading}
+              error={usersError}
+              actionError={userActionError}
+              updatingUserId={updatingUserId}
+              currentUsername={currentUser}
+              onReload={loadUsers}
+              onRoleChange={changeUserRole}
+              onBlockChange={changeUserBlock}
+            />
           )}
 
           {tab === "audit" && (
-            <section className={cardClass}>
-              <div className="mb-4 flex items-center justify-between">
-                <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Audit log</p>
-                <button onClick={loadAuditLog} className={iconButtonClass} title="Refresh audit log" aria-label="Refresh audit log">
-                  <IconRefresh className="h-4 w-4" />
-                </button>
-              </div>
-              {auditLoading && <TableSkeleton rows={5} cols={5} />}
-              {!auditLoading && auditError && <p className="text-sm text-red-600">{auditError}</p>}
-              {!auditLoading && !auditError && auditEntries.length === 0 && (
-                <p className="text-sm text-slate-500">No admin actions recorded yet.</p>
-              )}
-              {!auditLoading && !auditError && auditEntries.length > 0 && (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-slate-200 text-left text-slate-500">
-                        <th className="py-2 pr-4 font-medium">When</th>
-                        <th className="py-2 pr-4 font-medium">Actor</th>
-                        <th className="py-2 pr-4 font-medium">Action</th>
-                        <th className="py-2 pr-4 font-medium">Target</th>
-                        <th className="py-2 pr-4 font-medium">Details</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {auditEntries.map((entry) => (
-                        <tr key={entry.id} className="border-b border-slate-100 align-top hover:bg-slate-50">
-                          <td className="whitespace-nowrap py-2.5 pr-4 text-slate-500">{new Date(entry.created_at).toLocaleString()}</td>
-                          <td className="py-2.5 pr-4 text-slate-900">{usernameById.get(entry.actor_id) ?? entry.actor_id}</td>
-                          <td className="py-2.5 pr-4"><Badge>{formatAction(entry.action)}</Badge></td>
-                          <td className="py-2.5 pr-4 text-slate-900">{usernameById.get(entry.target_user_id) ?? entry.target_user_id}</td>
-                          <td className="py-2.5 pr-4 text-slate-600">{formatDetails(entry.details)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
+            <AuditTab entries={auditEntries} loading={auditLoading} error={auditError} usernameById={usernameById} onReload={loadAuditLog} />
           )}
-        </div>
+        </main>
       </div>
-    </div>
-  );
-}
 
-function StatCard({
-  icon: Icon,
-  label,
-  value,
-  sub,
-}: {
-  icon: (props: IconProps) => ReactNode;
-  label: string;
-  value: string | number;
-  sub?: string;
-}) {
-  return (
-    <div className={cardClass}>
-      <div className="flex items-center justify-between gap-2">
-        <p className="min-w-0 truncate text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
-        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
-          <Icon className="h-4 w-4" />
-        </span>
-      </div>
-      <p className="mt-2 truncate text-2xl font-semibold text-slate-900">{value}</p>
-      {sub && <p className="mt-1 text-xs text-slate-500">{sub}</p>}
+      {confirmDialog}
+      {toaster}
     </div>
   );
 }

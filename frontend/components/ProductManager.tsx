@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState, type FormEvent, type SVGProps } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent, type SVGProps } from "react";
 import { upload } from "@vercel/blob/client";
 import { authenticatedFetch, extractErrorMessage } from "@/lib/auth-store";
 import { TableSkeleton } from "@/components/TableSkeleton";
@@ -68,11 +68,11 @@ const inputClass =
   "w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500";
 const labelClass = "block text-sm font-medium text-slate-700 mb-1.5";
 const primaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors";
+  "inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:opacity-60 disabled:cursor-not-allowed transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-1";
 const ghostButtonClass =
-  "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors disabled:opacity-60";
+  "inline-flex items-center gap-2 rounded-lg px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 transition-colors motion-reduce:transition-none disabled:opacity-60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500";
 const iconButtonClass =
-  "inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors disabled:opacity-50";
+  "inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-900 transition-colors motion-reduce:transition-none disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500";
 
 type IconProps = SVGProps<SVGSVGElement>;
 const iconDefaults = { viewBox: "0 0 24 24", fill: "none", stroke: "currentColor", strokeWidth: 1.8, strokeLinecap: "round" as const, strokeLinejoin: "round" as const };
@@ -111,11 +111,19 @@ export function ProductManager({
   authToken,
   onSessionExpired,
   onProductsChange,
+  confirm,
+  notify,
 }: {
   authToken: string;
   onSessionExpired: () => void;
   onProductsChange?: (products: Product[]) => void;
+  /** Optional nicer dialog; falls back to window.confirm (e.g. on /lister). */
+  confirm?: (options: { title: string; body?: string; confirmLabel?: string; tone?: "default" | "danger" }) => Promise<boolean>;
+  notify?: (message: string, tone?: "success" | "error") => void;
 }) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const formRef = useRef<HTMLElement>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
   const [productsError, setProductsError] = useState("");
@@ -138,14 +146,15 @@ export function ProductManager({
   };
 
   const sortedProducts = useMemo(() => {
-    const list = [...products];
+    const query = search.trim().toLowerCase();
+    const list = products.filter((item) => !query || `${item.name} ${item.category} ${item.brand}`.toLowerCase().includes(query));
     const { key, direction } = sort;
     list.sort((a, b) => {
       const result = key === "price" || key === "stock" ? a[key] - b[key] : a[key].localeCompare(b[key]);
       return direction === "asc" ? result : -result;
     });
     return list;
-  }, [products, sort]);
+  }, [products, sort, search]);
 
   const uploadImage = async (file: File) => {
     setUploading(true);
@@ -157,6 +166,7 @@ export function ProductManager({
         clientPayload: authToken,
       });
       setForm((current) => ({ ...current, image_url: blob.url }));
+      notify?.("Image uploaded");
     } catch {
       setUploadError("Could not upload image.");
     } finally {
@@ -201,12 +211,22 @@ export function ProductManager({
     setForm(EMPTY_FORM);
     setEditingId(null);
     setFormError("");
+    setFormOpen(false);
+  };
+
+  const openForm = () => {
+    setFormOpen(true);
+    requestAnimationFrame(() => {
+      formRef.current?.scrollIntoView?.({ behavior: "smooth", block: "start" });
+      document.getElementById("pm-name")?.focus();
+    });
   };
 
   const startEdit = (product: Product) => {
     setForm(productToForm(product));
     setEditingId(product.id);
     setFormError("");
+    openForm();
   };
 
   const submitForm = async (event: FormEvent) => {
@@ -232,6 +252,7 @@ export function ProductManager({
         setFormError(extractErrorMessage(data, "Could not save the product."));
         return;
       }
+      notify?.(editingId ? "Product saved" : "Product added");
       resetForm();
       loadProducts();
     } catch {
@@ -242,7 +263,10 @@ export function ProductManager({
   };
 
   const deleteProduct = async (product: Product) => {
-    if (!window.confirm(`Delete "${product.name}"? This cannot be undone.`)) return;
+    const confirmed = confirm
+      ? await confirm({ title: `Delete "${product.name}"?`, body: "This cannot be undone.", confirmLabel: "Delete", tone: "danger" })
+      : window.confirm(`Delete "${product.name}"? This cannot be undone.`);
+    if (!confirmed) return;
     setDeletingId(product.id);
     try {
       const response = await authenticatedFetch(`${API_BASE}/products/${product.id}`, authToken, { method: "DELETE" });
@@ -257,6 +281,7 @@ export function ProductManager({
         return;
       }
       if (editingId === product.id) resetForm();
+      notify?.("Product deleted");
       loadProducts();
     } finally {
       setDeletingId(null);
@@ -265,7 +290,13 @@ export function ProductManager({
 
   return (
     <div className="space-y-6">
-      <section className={cardClass}>
+      {!formOpen && (
+        <div className="flex justify-end">
+          <button type="button" onClick={openForm} className={primaryButtonClass}>Add product</button>
+        </div>
+      )}
+      {formOpen && (
+      <section ref={formRef} className={cardClass}>
         <p role="heading" aria-level={2} className="mb-4 text-base font-semibold text-slate-900">{editingId ? "Edit product" : "Add a product"}</p>
         <form onSubmit={submitForm} className="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
@@ -320,7 +351,11 @@ export function ProductManager({
             <label htmlFor="pm-image" className={labelClass}>Image URL (or upload below)</label>
             <input id="pm-image" required placeholder="https://..." value={form.image_url} onChange={(event) => setForm({ ...form, image_url: event.target.value })} className={inputClass} />
           </div>
-          <div className="flex items-center gap-3 md:col-span-2">
+          <div className="flex flex-wrap items-center gap-3 md:col-span-2">
+            {form.image_url.trim() && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={form.image_url} alt="Product preview" className="h-16 w-16 rounded-lg border border-slate-200 object-cover" />
+            )}
             <input
               type="file"
               accept="image/jpeg,image/png,image/webp,image/avif"
@@ -330,39 +365,56 @@ export function ProductManager({
                 if (file) uploadImage(file);
                 event.target.value = "";
               }}
-              className="text-sm text-slate-600"
+              className="text-sm text-slate-600 file:mr-3 file:cursor-pointer file:rounded-lg file:border-0 file:bg-indigo-50 file:px-3 file:py-2 file:text-sm file:font-medium file:text-indigo-700 hover:file:bg-indigo-100"
             />
             {uploading && <span className="text-sm text-slate-500">Uploading...</span>}
-            {uploadError && <span className="text-sm text-red-600">{uploadError}</span>}
+            {uploadError && <span role="alert" className="text-sm text-red-600">{uploadError}</span>}
           </div>
           <div className="md:col-span-2">
             <label htmlFor="pm-description" className={labelClass}>Description</label>
             <textarea id="pm-description" placeholder="Description" value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} className={inputClass} rows={3} />
           </div>
-          {formError && <p className="text-sm text-red-600 md:col-span-2">{formError}</p>}
+          {formError && <p role="alert" className="text-sm text-red-600 md:col-span-2">{formError}</p>}
           <div className="flex gap-3 md:col-span-2">
             <button type="submit" disabled={formSaving} className={primaryButtonClass}>
               {formSaving ? "Saving..." : editingId ? "Save changes" : "Add product"}
             </button>
-            {editingId && (
-              <button type="button" onClick={resetForm} className={ghostButtonClass}>
-                Cancel
-              </button>
-            )}
+            <button type="button" onClick={resetForm} className={ghostButtonClass}>
+              Cancel
+            </button>
           </div>
         </form>
       </section>
+      )}
 
       <section className={cardClass}>
-        <div className="mb-4 flex items-center justify-between">
-          <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Products ({products.length})</p>
-          <button onClick={loadProducts} className={iconButtonClass} title="Refresh products" aria-label="Refresh products">
-            <IconRefresh className="h-4 w-4" />
-          </button>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <p role="heading" aria-level={2} className="text-base font-semibold text-slate-900">Products ({sortedProducts.length})</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="search"
+              aria-label="Search products"
+              placeholder="Search products"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              className={`${inputClass} w-56`}
+            />
+            <button onClick={loadProducts} className={iconButtonClass} title="Refresh products" aria-label="Refresh products">
+              <IconRefresh className="h-4 w-4" />
+            </button>
+          </div>
         </div>
         {productsLoading && <TableSkeleton rows={5} cols={4} />}
-        {!productsLoading && productsError && <p className="text-sm text-red-600">{productsError}</p>}
-        {!productsLoading && !productsError && (
+        {!productsLoading && productsError && (
+          <div role="alert" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            <span>{productsError}</span>
+            <button type="button" onClick={loadProducts} className={ghostButtonClass}>Retry</button>
+          </div>
+        )}
+        {!productsLoading && !productsError && sortedProducts.length === 0 && (
+          <p className="py-8 text-center text-sm text-slate-500">{products.length === 0 ? "No products yet. Add your first one above." : "No products match your search."}</p>
+        )}
+        {!productsLoading && !productsError && sortedProducts.length > 0 && (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -377,9 +429,19 @@ export function ProductManager({
               <tbody>
                 {sortedProducts.map((product) => (
                   <tr key={product.id} className="border-b border-slate-100 hover:bg-slate-50">
-                    <td className="py-2.5 pr-4 text-slate-900">{product.name}</td>
+                    <td className="py-2.5 pr-4 text-slate-900">
+                      <div className="flex items-center gap-3">
+                        {product.image_url ? (
+                          // eslint-disable-next-line @next/next/no-img-element
+                          <img src={product.image_url} alt="" className="h-10 w-10 shrink-0 rounded-md border border-slate-200 object-cover" />
+                        ) : (
+                          <span aria-hidden="true" className="h-10 w-10 shrink-0 rounded-md bg-slate-100" />
+                        )}
+                        <span>{product.name}</span>
+                      </div>
+                    </td>
                     <td className="py-2.5 pr-4 text-slate-600">{product.category}</td>
-                    <td className="py-2.5 pr-4 text-slate-600">${product.price.toFixed(2)}</td>
+                    <td className="py-2.5 pr-4 tabular-nums text-slate-600">${product.price.toFixed(2)}</td>
                     <td className="py-2.5 pr-4">
                       {product.variants && product.stock > 0 && variantTotals(product.variants).soldOut > 0 && (
                         <span className="mr-2 text-xs text-amber-700">{variantTotals(product.variants).soldOut} variants out</span>
