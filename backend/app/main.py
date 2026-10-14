@@ -1,7 +1,7 @@
 from contextlib import asynccontextmanager
 
 import sentry_sdk
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from slowapi.errors import RateLimitExceeded
@@ -47,6 +47,13 @@ app.include_router(orders_router)
 app.include_router(chat_router)
 app.include_router(users_router)
 app.include_router(contact_router)
+
+
+# TEMPORARY: Sentry delivery check. Remove after confirming an event in Sentry.
+@app.get("/debug-sentry", include_in_schema=False)
+@limiter.limit("2/minute")
+async def debug_sentry(request: Request):
+    raise RuntimeError("Sentry test event - safe to ignore")
 
 
 @app.get("/health")

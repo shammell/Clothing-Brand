@@ -12,12 +12,19 @@ logger = logging.getLogger(__name__)
 # delivery to arbitrary recipients in production.
 FROM_ADDRESS = "Thread&Co <onboarding@resend.dev>"
 
+# Resend rejects these with a 422; skipping them keeps seed/test accounts out of its logs.
+RESERVED_DOMAINS = {"example.com", "example.org", "example.net", "test.com"}
+
 
 def send_email(to: str, subject: str, html: str) -> bool:
     """Sends an email via Resend. Returns False (and logs) instead of
     raising - a failed notification email must never fail the request that
     triggered it (an order was still placed, a message was still received)
     even if Resend is down or RESEND_API_KEY isn't configured yet."""
+    domain = to.rsplit("@", 1)[-1].lower()
+    if domain in RESERVED_DOMAINS or domain.endswith((".test", ".invalid", ".example", ".localhost")):
+        logger.info("Skipping email to reserved domain %s: %s", domain, subject)
+        return False
     if not settings.RESEND_API_KEY:
         logger.warning("RESEND_API_KEY not set - email to %s not sent: %s", to, subject)
         return False
