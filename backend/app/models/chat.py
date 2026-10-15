@@ -1,5 +1,6 @@
 from typing import Literal, Optional
 
+from bson import ObjectId
 from pydantic import BaseModel, Field, field_validator
 
 MAX_HISTORY_MESSAGES = 20
@@ -17,6 +18,14 @@ class ChatMessageRequest(BaseModel):
     history: list[dict[str, str]] = Field(default_factory=list, max_length=MAX_HISTORY_MESSAGES)
     fit_profile: Optional[FitProfile] = None
     product_id: Optional[str] = Field(default=None, max_length=40)
+
+    @field_validator("product_id")
+    @classmethod
+    def validate_product_id(cls, product_id: Optional[str]) -> Optional[str]:
+        # product_id is echoed into the system prompt, so only a real id may pass.
+        if product_id is not None and not ObjectId.is_valid(product_id):
+            raise ValueError("product_id must be a valid product id")
+        return product_id
 
     @field_validator("history")
     @classmethod

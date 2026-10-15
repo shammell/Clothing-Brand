@@ -96,6 +96,7 @@ def test_admin_can_create_update_and_delete_product(client, admin_headers):
             "colors": ["Black"],
             "image_url": "/products/no-image.svg",
             "stock": 8,
+            "stock_rev": 0,
         },
     )
     assert update_response.status_code == 200
@@ -128,6 +129,7 @@ def test_lister_can_update_and_delete_product(client, lister_headers, seed_produ
         json={
             "name": "Updated Tee", "price": 25.0, "category": "T-Shirts", "brand": "TestBrand",
             "sizes": ["S"], "colors": ["Black"], "image_url": "/products/no-image.svg", "stock": 3,
+            "stock_rev": 0,
         },
     )
     assert update.status_code == 200
@@ -219,6 +221,7 @@ def test_derived_fields_correct_after_update(client, admin_headers, seed_product
         {"size": "L", "color": "Navy", "stock": 2},
         {"size": "XL", "color": "Navy", "stock": 3},
     ]
+    payload["stock_rev"] = 0
     response = client.put(f"/products/{product_id}", json=payload, headers=admin_headers)
     assert response.status_code == 200
     body = response.json()
@@ -240,9 +243,16 @@ def test_legacy_update_with_same_total_keeps_variant_stock(client, admin_headers
 
 def test_legacy_update_with_new_total_resplits(client, admin_headers, seed_product):
     product_id = seed_product(sizes=["S", "M"], colors=["Black"], stock=4)
-    payload = {**LEGACY_PAYLOAD, "sizes": ["S", "M"], "colors": ["Black"], "stock": 10}
+    payload = {**LEGACY_PAYLOAD, "sizes": ["S", "M"], "colors": ["Black"], "stock": 10, "stock_rev": 0}
     body = client.put(f"/products/{product_id}", json=payload, headers=admin_headers).json()
     assert body["stock"] == 10
+
+
+def test_stock_change_without_revision_is_rejected(client, admin_headers, seed_product):
+    product_id = seed_product(sizes=["S"], colors=["Black"], stock=4)
+    payload = {**LEGACY_PAYLOAD, "sizes": ["S"], "colors": ["Black"], "stock": 10}
+    assert client.put(f"/products/{product_id}", json=payload, headers=admin_headers).status_code == 409
+    assert client.get(f"/products/{product_id}").json()["stock"] == 4
 
 
 def test_oversized_size_color_matrix_rejected(client, admin_headers):

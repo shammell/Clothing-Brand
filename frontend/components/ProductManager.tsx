@@ -24,6 +24,7 @@ type Product = {
   colors: string[];
   image_url: string;
   stock: number;
+  stock_rev?: number;
   variants?: ApiVariant[];
   companions?: string[];
   rating: number;
@@ -34,6 +35,8 @@ type ProductFormState = {
   sizes: string; colors: string; image_url: string; variantStock: Record<string, string>; rating: string;
   // Only sent when the admin changes it, so saving other edits never marks a generated list as manual.
   companions: string[]; companionsTouched: boolean;
+  // Stock version the form was loaded with; the server rejects a stock change if it moved since.
+  stockRev?: number;
 };
 
 const EMPTY_FORM: ProductFormState = {
@@ -48,6 +51,7 @@ function productToForm(product: Product): ProductFormState {
     colors: product.colors.join(", "), image_url: product.image_url, variantStock: variantsToValues(product.variants ?? []),
     rating: String(product.rating),
     companions: product.companions ?? [], companionsTouched: false,
+    stockRev: product.stock_rev ?? 0,
   };
 }
 
@@ -62,6 +66,7 @@ function formToPayload(form: ProductFormState) {
     image_url: form.image_url.trim(),
     rating: Number(form.rating) || 0,
     ...(form.companionsTouched ? { companions: form.companions } : {}),
+    ...(form.stockRev !== undefined ? { stock_rev: form.stockRev } : {}),
   };
 }
 

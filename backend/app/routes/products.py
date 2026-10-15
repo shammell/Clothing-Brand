@@ -23,6 +23,10 @@ def serialize_product(product: dict[str, Any]) -> dict[str, Any]:
     } | {"id": str(product["_id"])}
 
 
+def variant_stock(product: dict[str, Any]) -> dict[tuple[str, str], int]:
+    return {(v["size"], v["color"]): v["stock"] for v in product["variants"]}
+
+
 def parse_product_id(product_id: str) -> ObjectId:
     try:
         return ObjectId(product_id)
@@ -34,13 +38,14 @@ def parse_product_id(product_id: str) -> ObjectId:
 
 
 MAX_PAGE_SIZE = 200
+MAX_SKIP = 1_000_000
 MAX_LOOKS = 100
 
 
 @router.get("/", response_model=list[ProductResponse])
 async def get_products(
     category: Optional[str] = None,
-    skip: int = Query(default=0, ge=0),
+    skip: int = Query(default=0, ge=0, le=MAX_SKIP),
     limit: int = Query(default=MAX_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
 ):
     """One page of the catalogue. A page shorter than `limit` is the last one."""
@@ -170,10 +175,27 @@ async def update_product(product_id: str, product: ProductCreate, _: CurrentUser
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Product not found",
         )
-    await db["products"].update_one(
-        {"_id": object_id},
-        {"$set": build_update_document(str(object_id), product.model_dump(), ensure_variants(existing))},
-    )
+    current = ensure_variants(existing)
+    document = build_update_document(str(object_id), product.model_dump(), current)
+    query: dict[str, Any] = {"_id": object_id}
+    update: dict[str, Any] = {"$set": document}
+    if variant_stock(document) != variant_stock(current):
+        # Changing stock is a read-modify-write on numbers customers move
+        # concurrently, so it only applies if nothing moved since the form
+        # was loaded (compare-and-set on stock_rev).
+        if product.stock_rev is None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Stock changed since this product was loaded. Reload it and try again.",
+            )
+        query["stock_rev"] = {"$in": [0, None]} if product.stock_rev == 0 else product.stock_rev
+        update["$inc"] = {"stock_rev": 1}
+    result = await db["products"].update_one(query, update)
+    if result.matched_count == 0:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Stock changed since this product was loaded. Reload it and try again.",
+        )
     updated = await db["products"].find_one({"_id": object_id})
     if updated is None:
         raise HTTPException(

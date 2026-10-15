@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, useState } from "react";
 import { getAuthServerSnapshot, getAuthTokenSnapshot, subscribeToStorage } from "@/lib/auth-store";
+import { refreshCartPrices } from "@/lib/refreshCartPrices";
 import { getCartServerSnapshot, getCartSnapshot } from "@/lib/shop-store";
 
 export const CHECKOUT_ADDRESS_KEY = "threadco_checkout_address";
@@ -30,6 +31,7 @@ export default function CheckoutPage() {
   const authToken = useSyncExternalStore(subscribeToStorage, getAuthTokenSnapshot, getAuthServerSnapshot);
   const [address, setAddress] = useState<ShippingAddressForm>(EMPTY_SHIPPING_ADDRESS);
   const [formError, setFormError] = useState("");
+  const [priceChanged, setPriceChanged] = useState(false);
   // authToken/cart read getAuthServerSnapshot/getCartServerSnapshot ("" / [])
   // during the hydration render, then correct to the real localStorage value
   // one render later. On a hard page load, this component's own effects run
@@ -55,6 +57,15 @@ export default function CheckoutPage() {
     if (!authToken) router.replace("/login?next=/checkout");
     else if (cart.length === 0) router.replace("/cart");
   }, [readyToRedirect, authToken, cart.length, router]);
+
+  // The bag holds prices from when items were added; the server charges the
+  // current ones, so show those before the shopper commits.
+  useEffect(() => {
+    if (!readyToRedirect || !authToken) return;
+    refreshCartPrices().then((changed) => {
+      if (changed) setPriceChanged(true);
+    });
+  }, [readyToRedirect, authToken]);
 
   const updateField = (field: keyof ShippingAddressForm, value: string) => {
     setAddress((current) => ({ ...current, [field]: value }));
@@ -95,6 +106,7 @@ export default function CheckoutPage() {
         </div>
         <input placeholder="Phone (optional)" value={address.phone} onChange={(event) => updateField("phone", event.target.value)} />
       </div>
+      {priceChanged && <p className="auth-error">Some prices in your bag have changed. The total below is up to date.</p>}
       {formError && <p className="auth-error">{formError}</p>}
       <button className="checkout interactive" onClick={continueToPayment}>
         Continue to payment <span>${cartTotal.toFixed(2)}</span>

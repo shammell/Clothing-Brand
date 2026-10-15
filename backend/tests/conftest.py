@@ -9,6 +9,9 @@ os.environ.setdefault("MONGODB_URL", "mongodb://localhost:27017")
 os.environ.setdefault("DB_NAME", "test_db")
 os.environ.setdefault("JWT_SECRET_KEY", "pytest-only-secret-not-for-production")
 os.environ.setdefault("GROQ_API_KEY", "pytest-only-placeholder")
+# Assigned, not setdefault: an exported or .env RESEND_API_KEY must never let the
+# suite send real email. Empty makes send_email log and return.
+os.environ["RESEND_API_KEY"] = ""
 
 import pytest
 from fastapi.testclient import TestClient

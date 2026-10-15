@@ -40,7 +40,7 @@ def test_self_and_duplicate_companions_rejected(client, admin_headers, seed_prod
     a, b = seed_product(name="A"), seed_product(name="B")
     payload = {
         "name": "A", "price": 5, "category": "T-Shirts", "brand": "x", "image_url": "/x",
-        "sizes": ["S"], "colors": ["Black"], "stock": 3,
+        "sizes": ["S"], "colors": ["Black"], "stock": 3, "stock_rev": 0,
     }
     assert client.put(f"/products/{a}", json={**payload, "companions": [a]}, headers=admin_headers).status_code == 422
     assert client.put(f"/products/{a}", json={**payload, "companions": [b, b]}, headers=admin_headers).status_code == 422
@@ -55,7 +55,7 @@ def test_update_without_companions_keeps_the_stored_list(client, admin_headers, 
     a = seed_product(name="A", companions=[b], companions_source="generated")
     payload = {
         "name": "A2", "price": 5, "category": "T-Shirts", "brand": "x", "image_url": "/x",
-        "sizes": ["S"], "colors": ["Black"], "stock": 3,
+        "sizes": ["S"], "colors": ["Black"], "stock": 3, "stock_rev": 0,
     }
     body = client.put(f"/products/{a}", json=payload, headers=admin_headers).json()
     assert body["companions"] == [b] and body["companions_source"] == "generated"

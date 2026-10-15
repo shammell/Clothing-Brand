@@ -1,11 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect } from "react";
+import { refreshCartPrices } from "@/lib/refreshCartPrices";
 import { FALLBACK_IMAGE } from "@/lib/shop-store";
 import { useCart } from "@/lib/useCart";
 
 export default function CartPage() {
   const { cart, cartTotal, cartCount, removeFromCart, updateCartQuantity, goToCheckout } = useCart();
+
+  // Show what the server will actually charge, not the price saved when the item was added.
+  useEffect(() => {
+    refreshCartPrices();
+  }, []);
 
   return (
     <main className="page-shell">

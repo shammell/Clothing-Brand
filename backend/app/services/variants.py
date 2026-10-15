@@ -44,7 +44,7 @@ def build_product_document(product_id: str, payload: dict[str, Any]) -> dict[str
     document = {
         key: value
         for key, value in payload.items()
-        if key not in ("variants", "sizes", "colors", "stock", "companions")
+        if key not in ("variants", "sizes", "colors", "stock", "stock_rev", "companions")
     }
     if payload.get("companions") is not None:
         document["companions"] = payload["companions"]

@@ -7,7 +7,7 @@ from pymongo import ReturnDocument
 from pymongo.errors import DuplicateKeyError
 
 from app.core.database import get_database
-from app.models.order import OrderCreate, OrderItemResponse, OrderResponse, OrderStatusUpdate
+from app.models.order import ORDER_STATUSES, OrderCreate, OrderItemResponse, OrderResponse, OrderStatusUpdate
 from app.services.auth_service import CurrentUser, get_current_user, require_admin
 from app.services.email_service import send_email
 from app.services.variants import ensure_variants
@@ -32,11 +32,11 @@ async def release_variant_stock(
     if size and color:
         result = await products_collection.update_one(
             {"_id": object_id, "variants": {"$elemMatch": {"size": size, "color": color}}},
-            {"$inc": {"variants.$.stock": quantity, "stock": quantity}},
+            {"$inc": {"variants.$.stock": quantity, "stock": quantity, "stock_rev": 1}},
         )
         if result.modified_count:
             return
-    await products_collection.update_one({"_id": object_id}, {"$inc": {"stock": quantity}})
+    await products_collection.update_one({"_id": object_id}, {"$inc": {"stock": quantity, "stock_rev": 1}})
 
 
 async def release_all(products_collection, reserved: list[tuple[ObjectId, str, str, int]]) -> None:
@@ -143,7 +143,7 @@ async def create_order(
                     "_id": object_id,
                     "variants": {"$elemMatch": {"size": size, "color": color, "stock": {"$gte": quantity}}},
                 },
-                {"$inc": {"variants.$.stock": -quantity, "stock": -quantity}},
+                {"$inc": {"variants.$.stock": -quantity, "stock": -quantity, "stock_rev": 1}},
             )
             if result.modified_count == 0:
                 raise HTTPException(
@@ -248,6 +248,13 @@ async def list_all_orders(_: CurrentUser = Depends(require_admin)):
     return [serialize_order(order) for order in orders]
 
 
+def allowed_previous_statuses(target: str) -> list[str]:
+    """Statuses an order may be in for a move to `target` to be legal."""
+    if target == "cancelled":
+        return ["placed", "processing"]
+    return list(ORDER_STATUSES[: ORDER_STATUSES.index(target)])
+
+
 @router.patch("/{order_id}/status", response_model=OrderResponse)
 async def update_order_status(
     order_id: str,
@@ -263,15 +270,17 @@ async def update_order_status(
             detail="Invalid order id",
         ) from error
 
-    # Cancelling is one-way. Stock was reserved at order creation and is given
-    # back on cancel; reopening would need re-reserving stock that may be gone,
-    # and a second cancel would credit it twice. The status change is claimed
-    # atomically (filter on "not already cancelled"), so of two concurrent
-    # requests only one wins and only the winner releases stock. A crash
-    # between claim and release under-counts stock rather than over-counting.
+    # Status only moves forward (placed -> processing -> shipped -> delivered).
+    # Cancelling is one-way and only possible before the goods ship: stock was
+    # reserved at order creation and is given back on cancel, so cancelling a
+    # shipped/delivered order would restock goods the customer already has, and
+    # a second cancel would credit it twice. The change is claimed atomically
+    # (filter on the allowed previous statuses), so of two concurrent requests
+    # only one wins and only the winner releases stock. A crash between claim
+    # and release under-counts stock rather than over-counting.
     orders_collection = db["orders"]
     claimed = await orders_collection.find_one_and_update(
-        {"_id": object_id, "status": {"$ne": "cancelled"}},
+        {"_id": object_id, "status": {"$in": allowed_previous_statuses(update.status)}},
         {"$set": {"status": update.status}},
         return_document=ReturnDocument.AFTER,
     )
@@ -282,12 +291,14 @@ async def update_order_status(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Order not found",
             )
-        if update.status == "cancelled":
+        if existing["status"] == update.status:
             return serialize_order(existing)
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cancelled orders cannot be reopened",
+        detail = (
+            "Cancelled orders cannot be reopened"
+            if existing["status"] == "cancelled"
+            else f"Cannot change order status from {existing['status']} to {update.status}"
         )
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
 
     if update.status == "cancelled":
         products_collection = db["products"]

@@ -8,13 +8,14 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 MAX_OPTIONS = 15
 MAX_VARIANTS = 200
 MAX_COMPANIONS = 4
+MAX_STOCK = 1_000_000
 
 
 class Variant(BaseModel):
     sku: str = ""
     size: str = Field(min_length=1, max_length=50)
     color: str = Field(min_length=1, max_length=50)
-    stock: int = Field(ge=0)
+    stock: int = Field(ge=0, le=MAX_STOCK)
 
 
 class ProductBase(BaseModel):
@@ -32,10 +33,14 @@ class ProductCreate(ProductBase):
     variants: Optional[list[Variant]] = Field(default=None, min_length=1, max_length=MAX_VARIANTS)
     sizes: Optional[list[str]] = Field(default=None, min_length=1, max_length=MAX_OPTIONS)
     colors: Optional[list[str]] = Field(default=None, min_length=1, max_length=MAX_OPTIONS)
-    stock: Optional[int] = Field(default=None, ge=0)
+    stock: Optional[int] = Field(default=None, ge=0, le=MAX_STOCK)
     # None means "leave the stored list alone" (the older admin form never sends it).
     # Sending a list, even an empty one, marks it as set by hand.
     companions: Optional[list[str]] = Field(default=None, max_length=MAX_COMPANIONS)
+    # Version of the stock numbers the admin form was loaded with (PUT only).
+    # Required to change stock, so a stale form cannot overwrite stock that
+    # sold or was restocked since it was opened.
+    stock_rev: Optional[int] = Field(default=None, ge=0)
 
     @field_validator("companions")
     @classmethod
@@ -66,6 +71,7 @@ class ProductResponse(ProductBase):
     sizes: list[str]
     colors: list[str]
     stock: int
+    stock_rev: int = 0
     companions: list[str] = Field(default_factory=list)
     companions_source: Optional[Literal["manual", "generated"]] = None
 
